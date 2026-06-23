@@ -1,0 +1,28 @@
+name: Publish Flutter Images
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  publish:
+    name: Publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publish Flutter images
+        uses: dagger/dagger-for-github@v8
+        with:
+          workdir: flutter-container
+          version: "0.21.7"
+          call: >-
+            publish
+            --registry=${{ vars.REGISTRY }}
+            --username=${{ vars.REGISTRY_USERNAME }}
+            --password=env:REGISTRY_PASSWORD
+          cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
+        env:
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}

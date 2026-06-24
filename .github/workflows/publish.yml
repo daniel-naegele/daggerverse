@@ -25,4 +25,4 @@ jobs:
             --password=env:REGISTRY_PASSWORD
           cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
         env:
-          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+          REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}

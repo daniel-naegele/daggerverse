@@ -1,0 +1,53 @@
+name: Check Flutter Version
+
+on:
+  schedule:
+    - cron: '0 8 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get latest stable Flutter version
+        id: latest
+        uses: dagger/dagger-for-github@v8.4.0
+        with:
+          workdir: flutter-container
+          version: "0.21.7"
+          call: latest-version
+          cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
+
+      - name: Get current default version
+        id: current
+        run: |
+          version=$(grep 'FlutterVersion:' flutter-container/main.go | grep -oE '"[^"]+"' | tr -d '"')
+          echo "version=$version" >> $GITHUB_OUTPUT
+
+      - name: Open PR if version changed
+        if: steps.latest.outputs.output != steps.current.outputs.version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          NEW="${{ steps.latest.outputs.output }}"
+          BRANCH="flutter-version/${NEW}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          sed -i "s/FlutterVersion: \"[^\"]*\"/FlutterVersion: \"${NEW}\"/g" flutter-container/main.go
+          sed -i "s/FlutterVersion: \"[^\"]*\"/FlutterVersion: \"${NEW}\"/g" flutter/main.go
+          git add flutter-container/main.go flutter/main.go
+          git commit -m "chore: bump default Flutter version to ${NEW}"
+          git push origin "$BRANCH"
+          gh pr create \
+            --title "chore: bump default Flutter version to ${NEW}" \
+            --body "Automated PR: updates the default Flutter version from \`${{ steps.current.outputs.version }}\` to \`${NEW}\`." \
+            --base main \
+            --head "$BRANCH"

@@ -1,0 +1,60 @@
+name: Backfill Flutter Images
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  versions:
+    name: List versions
+    runs-on: ubuntu-latest
+    outputs:
+      versions: ${{ steps.matrix.outputs.versions }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get stable Flutter versions (last 2 years)
+        id: stable
+        uses: dagger/dagger-for-github@v8.4.0
+        with:
+          workdir: flutter-container
+          version: "0.21.7"
+          call: stable-versions-since
+          cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
+
+      - name: Build matrix JSON
+        id: matrix
+        env:
+          VERSIONS: ${{ steps.stable.outputs.output }}
+        run: |
+          matrix=$(echo "$VERSIONS" | jq -Rsc '[split("\n")[] | select(length > 0)]')
+          echo "versions=$matrix" >> $GITHUB_OUTPUT
+
+  publish:
+    name: Publish ${{ matrix.version }}
+    needs: versions
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        version: ${{ fromJSON(needs.versions.outputs.versions) }}
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publish Flutter images for ${{ matrix.version }}
+        uses: dagger/dagger-for-github@v8.4.0
+        with:
+          workdir: flutter-container
+          version: "0.21.7"
+          call: >-
+            with-flutter-version --version=${{ matrix.version }}
+            publish
+            --registry=${{ vars.REGISTRY }}
+            --username=${{ vars.REGISTRY_USERNAME }}
+            --password=env:REGISTRY_PASSWORD
+          cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
+        env:
+          REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}

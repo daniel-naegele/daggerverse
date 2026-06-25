@@ -18,15 +18,21 @@ func androidBase(platform dagger.Platform, flutterVersion string) *dagger.Contai
 				` && mkdir -p ` + androidHome + `/cmdline-tools/` +
 				` && unzip -q android-cmdline-tools.zip -d ` + androidHome + `/cmdline-tools/` +
 				` && mv ` + androidHome + `/cmdline-tools/cmdline-tools ` + androidHome + `/cmdline-tools/latest` +
-				` && rm android-cmdline-tools.zip` +
-				` && yes | sdkmanager --licenses` +
+				` && rm android-cmdline-tools.zip`,
+		}).
+		WithExec([]string{"sh", "-c",
+			` yes | sdkmanager --licenses` +
 				` && mkdir -p /root/.android` +
-				` && touch /root/.android/repositories.cfg` +
-				` && sdkmanager --update` +
+				` && touch /root/.android/repositories.cfg`,
+		}).
+		WithExec([]string{"sh", "-c",
+			`sdkmanager --update` +
 				// Install packages listed in Flutter's android_sdk/packages.txt for this version
 				` && packages=$(curl -s https://raw.githubusercontent.com/flutter/flutter/refs/tags/` + flutterVersion + `/engine/src/flutter/tools/android_sdk/packages.txt | grep -E '(platforms|build-tools|platform-tools|ndk)$' | cut -d: -f1 | cut -d, -f1)` +
-				` && yes | sdkmanager $packages` +
-				` && yes | flutter doctor --android-licenses` +
+				` && yes | sdkmanager $packages`,
+		}).
+		WithExec([]string{"sh", "-c",
+			`yes | flutter doctor --android-licenses` +
 				` && flutter doctor` +
 				` && flutter precache --android`,
 		})

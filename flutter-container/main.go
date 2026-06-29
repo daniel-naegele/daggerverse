@@ -28,7 +28,7 @@ type FlutterContainer struct {
 
 func New() *FlutterContainer {
 	return &FlutterContainer{
-		FlutterVersion: "3.41.9",
+		FlutterVersion: "3.44.4",
 		AndroidVersion: "36",
 	}
 }

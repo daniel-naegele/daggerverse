@@ -40,6 +40,10 @@ jobs:
           BRANCH="flutter-version/${NEW}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git ls-remote --exit-code --heads origin "$BRANCH" > /dev/null 2>&1; then
+            echo "Branch $BRANCH already exists — PR likely already open. Skipping."
+            exit 0
+          fi
           git checkout -b "$BRANCH"
           sed -i "s/FlutterVersion: \"[^\"]*\"/FlutterVersion: \"${NEW}\"/g" flutter-container/main.go
           sed -i "s/FlutterVersion: \"[^\"]*\"/FlutterVersion: \"${NEW}\"/g" flutter/main.go

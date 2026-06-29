@@ -30,7 +30,11 @@ jobs:
         env:
           VERSIONS: ${{ steps.stable.outputs.output }}
         run: |
-          matrix=$(echo "$VERSIONS" | jq -Rsc '[split("\n")[] | select(length > 0)]')
+          matrix=$(echo "$VERSIONS" | jq -Rsc '[
+            split("\n")[] | select(length > 0) |
+            . as $v | (split(".") | map(tonumber)) as [$maj, $min, $pat] |
+            select($maj > 3 or ($maj == 3 and ($min > 29 or ($min == 29 and $pat >= 0))))
+          ]')
           echo "versions=$matrix" >> $GITHUB_OUTPUT
 
   publish:
@@ -44,7 +48,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check if image already published
+        id: check
+        env:
+          REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$REGISTRY_PASSWORD" | docker login ${{ vars.REGISTRY }} -u ${{ vars.REGISTRY_USERNAME }} --password-stdin
+          if docker manifest inspect "${{ vars.REGISTRY }}/flutter:${{ matrix.version }}" > /dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Publish Flutter images for ${{ matrix.version }}
+        if: steps.check.outputs.exists != 'true'
         uses: dagger/dagger-for-github@v8.4.0
         with:
           workdir: flutter-container

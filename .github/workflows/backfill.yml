@@ -48,18 +48,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check if image already published
-        id: check
-        env:
-          REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "$REGISTRY_PASSWORD" | docker login ${{ vars.REGISTRY }} -u ${{ vars.REGISTRY_USERNAME }} --password-stdin
-          if docker manifest inspect "${{ vars.REGISTRY }}/flutter:${{ matrix.version }}" > /dev/null 2>&1; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-          fi
-
       - name: Publish Flutter images for ${{ matrix.version }}
         if: steps.check.outputs.exists != 'true'
         uses: dagger/dagger-for-github@v8.4.0

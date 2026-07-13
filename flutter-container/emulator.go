@@ -40,7 +40,7 @@ func (m *FlutterContainer) Emulator(
 		WithExec([]string{"sh", "-c",
 			"apt-get update" +
 				" && apt-get install -y --no-install-recommends" +
-				" libpulse0 libxtst6 libnss3 libnspr4 libxss1 libasound2t64" +
+				" libpulse0 libxtst6 libnss3 libnspr4 libxss1 libasound2t64 libxkbfile1" +
 				" libatk-bridge2.0-0 libgtk-3-0 libgdk-pixbuf2.0-0" +
 				" && rm -rf /var/lib/apt/lists/*",
 		}).

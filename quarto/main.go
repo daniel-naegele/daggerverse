@@ -42,6 +42,13 @@ func New(
 		ctr = dag.Container().From(defaultImageRepository)
 	}
 
+	ctr = ctr.
+		WithExec([]string{"sh", "-c",
+			"apt update && " +
+			"apt install -y xz-utils && " +
+			"rm -rf /var/lib/apt/lists/*"}).
+		WithExec([]string{"quarto", "install", "tinytex"})
+
 	return &Quarto{ctr}
 }
 

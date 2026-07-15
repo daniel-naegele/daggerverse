@@ -1,0 +1,14 @@
+{
+  "name": "quarto",
+  "engineVersion": "v0.21.7",
+  "sdk": {
+    "source": "go"
+  },
+  "include": [
+    "!../.direnv",
+    "!../.devenv",
+    "!../go.work",
+    "!../go.work.sum"
+  ],
+  "disableDefaultFunctionCaching": true
+}

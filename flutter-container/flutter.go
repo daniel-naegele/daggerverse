@@ -26,15 +26,18 @@ func flutterBase(platform dagger.Platform, flutterVersion string) *dagger.Contai
 		WithExec([]string{"sh", "-c",
 			"touch /.dockerenv" +
 				" && apt-get update" +
-				" && apt-get install -y --no-install-recommends" +
-				" build-essential clang cmake curl git gnupg jq lcov" +
-				" libgtk-3-dev libstdc++-12-dev locales ninja-build" +
-				" openjdk-21-jdk openssh-client pkg-config python3" +
-				" ruby-full ruby-bundler sudo unzip wget zip" +
-				" && rm -rf /var/lib/apt/lists/*" +
+				" && apt-get install -y --no-install-recommends locales python3" +
 				" && echo 'en_US.UTF-8 UTF-8' > /etc/locale.gen" +
 				" && locale-gen" +
-				" && update-locale LANG=en_US.UTF-8" +
+				" && update-locale LANG=en_US.UTF-8",
+		}).
+		WithExec([]string{"sh", "-c",
+			"apt-get install -y --no-install-recommends" +
+				" build-essential clang cmake curl git gnupg jq lcov" +
+				" libgtk-3-dev libstdc++-12-dev ninja-build" +
+				" openjdk-21-jdk openssh-client pkg-config" +
+				" ruby-full ruby-bundler sudo unzip wget zip" +
+				" && rm -rf /var/lib/apt/lists/*" +
 				" && echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers",
 		}).
 		WithExec([]string{

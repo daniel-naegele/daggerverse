@@ -17,5 +17,5 @@ Dagger CI tasks for Flutter projects: static analysis, unit tests with coverage,
 Renders [Quarto](https://quarto.org) documentation projects. `Render` wraps `quarto render` directly for full control; `BuildDocs` is a sensible-default convenience — render a project's `docs/` subdirectory (or another via `docsDir`) and get the output back — callable directly from CI with no local Dagger module required:
 
 ```bash
-dagger call -m github.com/daniel-naegele/daggerverse/quarto build-docs export --path public
+dagger call -m github.com/daniel-naegele/daggerverse/quarto build-docs --source . export --path public
 ```

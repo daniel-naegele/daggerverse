@@ -38,10 +38,10 @@ func (m *FlutterContainer) Emulator(
 				flutterHome+"/bin:"+flutterHome+"/bin/cache/dart-sdk/bin:/root/.pub-cache/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin").
 		// Runtime deps required even for headless emulator runs
 		WithExec([]string{"sh", "-c",
-			"apt-get update" +
-				" && apt-get install -y --no-install-recommends" +
+			"for i in 1 2 3; do apt-get update && apt-get install -y --no-install-recommends" +
 				" libpulse0 libxtst6 libnss3 libnspr4 libxss1 libasound2t64 libxkbfile1" +
 				" libatk-bridge2.0-0 libgtk-3-0 libgdk-pixbuf2.0-0" +
+				" && break || { [ $i -lt 3 ] && sleep 5; }; done" +
 				" && rm -rf /var/lib/apt/lists/*",
 		}).
 		WithExec([]string{"sh", "-c",

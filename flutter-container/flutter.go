@@ -14,6 +14,10 @@ func flutterBase(platform dagger.Platform, flutterVersion string) *dagger.Contai
 	return ctr.
 		From("ubuntu:24.04").
 		WithEnvVariable("DEBIAN_FRONTEND", "noninteractive").
+		// Works around a QEMU user-mode emulation bug where glibc's rseq
+		// registration crashes Python 3.12 (SIGSEGV) when this stage is built
+		// for a non-native platform (e.g. linux/arm64 on an amd64 engine host).
+		WithEnvVariable("GLIBC_TUNABLES", "glibc.pthread.rseq=0").
 		WithEnvVariable("HOME", "/root").
 		WithEnvVariable("LANG", "en_US.UTF-8").
 		WithEnvVariable("LC_ALL", "en_US.UTF-8").
@@ -25,18 +29,18 @@ func flutterBase(platform dagger.Platform, flutterVersion string) *dagger.Contai
 		WithEnvVariable("PATH", flutterHome+"/bin:"+flutterHome+"/bin/cache/dart-sdk/bin:/root/.pub-cache/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin").
 		WithExec([]string{"sh", "-c",
 			"touch /.dockerenv" +
-				" && apt-get update" +
-				" && apt-get install -y --no-install-recommends locales python3" +
+				" && for i in 1 2 3; do apt-get update && apt-get install -y --no-install-recommends locales python3 && break || { [ $i -lt 3 ] && sleep 5; }; done" +
 				" && echo 'en_US.UTF-8 UTF-8' > /etc/locale.gen" +
 				" && locale-gen" +
 				" && update-locale LANG=en_US.UTF-8",
 		}).
 		WithExec([]string{"sh", "-c",
-			"apt-get install -y --no-install-recommends" +
+			"for i in 1 2 3; do apt-get install -y --no-install-recommends" +
 				" build-essential clang cmake curl git gnupg jq lcov" +
 				" libgtk-3-dev libstdc++-12-dev ninja-build" +
 				" openjdk-21-jdk openssh-client pkg-config" +
 				" ruby-full ruby-bundler sudo unzip wget zip" +
+				" && break || { [ $i -lt 3 ] && sleep 5; }; done" +
 				" && rm -rf /var/lib/apt/lists/*" +
 				" && echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers",
 		}).

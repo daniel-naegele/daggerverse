@@ -10,6 +10,7 @@ A monorepo of [Dagger](https://dagger.io) modules, each in its own subdirectory 
 |-----------|-------------|---------|
 | `flutter-container/` | `flutter-container` | Main module — builds Flutter Docker images and runs Flutter CI tasks |
 | `flutter/` | `flutter` | Placeholder scaffold (not yet implemented) |
+| `quarto/` | `quarto` | Renders Quarto documentation projects; `BuildDocs` is the sensible-default entry point for direct `-m` invocation from consumers with no local Dagger module |
 
 ## Common commands
 
@@ -62,6 +63,15 @@ flutterHome  = "/opt/flutter"
 androidHome  = "/opt/android-sdk-linux"
 workspaceDir = "/workspace"
 ```
+
+## quarto module architecture
+
+Module type: `Quarto`, wrapping a `Ctr *dagger.Container` built from the official `ghcr.io/quarto-dev/quarto` image (override via `New`'s `version`/`image`/`container` params) plus `tinytex` for PDF output.
+
+- `Render(ctx, source, input?, siteUrl?) *Renderer` — runs `quarto render` against an arbitrary source directory; chainable `Renderer.Directory()`/`Renderer.File(name)` extract the output.
+- `BuildDocs(ctx, source, docsDir?) *dagger.Directory` — thin wrapper around `Render(source.Directory(docsDir)).Directory()`. `source` is `+defaultPath="."` so CLI callers can omit it entirely; `docsDir` defaults to `"docs"`. This is the function meant to be called directly by consumers via `dagger call -m github.com/daniel-naegele/daggerverse/quarto build-docs`, without adding this module as a dependency — for consumers that need custom composition beyond "render one directory" (e.g. merging in separately-generated content), install it as a real dependency instead (`dagger install github.com/daniel-naegele/daggerverse/quarto`) and call `Render`/`BuildDocs` directly from Go.
+
+`quarto/tests/` is a separate Dagger module (depends on `quarto` via a local path, `"source": ".."`) that exercises the module against the `testdata/` fixture — run `dagger call all` from `quarto/tests/` after changing `quarto/main.go` (and running `dagger develop` in both `quarto/` and `quarto/tests/` to regenerate bindings).
 
 ## Generated files — do not edit
 

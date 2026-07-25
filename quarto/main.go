@@ -89,6 +89,26 @@ func (m *Quarto) Render(
 	}
 }
 
+// BuildDocs renders the docs subdirectory of source (default "docs") and
+// returns the rendered output directory — the common case of Render, for
+// consumers with no custom composition needs (e.g. calling this module
+// directly via `dagger call -m github.com/daniel-naegele/daggerverse/quarto
+// build-docs`, with no local Dagger module of their own).
+func (m *Quarto) BuildDocs(
+	ctx context.Context,
+
+	// Project source directory.
+	// +defaultPath="."
+	source *dagger.Directory,
+
+	// Subdirectory within source containing the Quarto project.
+	// +optional
+	// +default="docs"
+	docsDir string,
+) *dagger.Directory {
+	return m.Render(ctx, source.Directory(docsDir), "", "").Directory()
+}
+
 type Renderer struct {
 	// +private
 	Ctr *dagger.Container

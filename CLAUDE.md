@@ -32,22 +32,22 @@ Go is only used as the Dagger SDK language — there is no standalone Go binary 
 
 ## flutter-container module architecture
 
-Module type: `FlutterContainer`. Default versions: Flutter as set in `New()` in `main.go` (bumped by automated PRs), Android `36`. Use `WithFlutterVersion` / `WithAndroidVersion` to override (Dagger `WithSomething` chaining pattern).
+Module type: `FlutterContainer`. Default versions: Flutter as set in `New()` in `main.go` (bumped by automated PRs), Android `36`, cmdline-tools build `16111833` (23.0, amd64 only). Use `WithFlutterVersion` / `WithAndroidVersion` / `WithCmdlineToolsVersion` to override (Dagger `WithSomething` chaining pattern).
 
 **File-per-image-stage layout:**
 - `flutter.go` — `Flutter(platform?)` method + internal `flutterBase(platform, version)`: ubuntu:24.04 + system deps + Flutter SDK cloned from GitHub
-- `android.go` — `Android(platform?)` method + internal `androidBase(platform, version)`: extends flutter, adds Android cmdline-tools + SDK packages from Flutter's `packages.txt`
-- `emulator.go` — `Emulator(ctx, platform?)` method: extends android, installs emulator + AVD + `socat` + helper scripts; ABI auto-selected (`x86_64` for amd64, `arm64-v8a` for arm64). `EmulatorService(ctx, platform?, avdName?, port?)`: runs `android-start-emulator` as a service with `InsecureRootCapabilities` (for `/dev/kvm`) and `ANDROID_EMULATOR_EXPOSE_ADB=true`
+- `android.go` — `Android(platform?)` method + internal `androidBase(platform, flutterVersion, cmdlineToolsVersion)`: extends flutter, adds pinned Android cmdline-tools + SDK packages from Flutter's `packages.txt`. Installs with the Android CLI (`android sdk install`, licenses accepted implicitly) instead of the deprecated `sdkmanager`. The Android CLI is linux x86_64 only, so on arm64 (`uname -m` in `androidSdkSetup`) it falls back to cmdline-tools 22.0 (`legacyCmdlineToolsVersion`, last Java `sdkmanager`) and `sdkmanager`. `sdkmanager` stays on PATH for Flutter/Gradle; never call it in build steps on amd64 (also not via `flutter doctor --android-licenses`)
+- `emulator.go` — `Emulator(ctx, platform?)` method: extends android, installs emulator + system image (`android sdk install`) + AVD (`avdmanager`: `android emulator create` cannot set name/system image/ABI) + `socat` + helper scripts; ABI auto-selected (`x86_64` for amd64, `arm64-v8a` for arm64). `EmulatorService(ctx, platform?, avdName?, port?)`: runs `android-start-emulator` as a service with `InsecureRootCapabilities` (for `/dev/kvm`) and `ANDROID_EMULATOR_EXPOSE_ADB=true`
 - `scripts/` — `android-start-emulator`, `android-stop-emulator`, `android-wait-for-emulator`, embedded via `go:embed` and installed into `/usr/local/bin` of the emulator image
 - `publish.go` — `Publish(ctx, registry, username, password, platforms?)`: pushes multi-arch manifests for flutter, android, and emulator tags
 - `constants.go` — `PlatformAMD64`, `PlatformARM64`, `abiAMD64`, `abiARM64`, `emulatorABI(platform)` helper
-- `main.go` — struct, `New()`, `WithFlutterVersion`, `WithAndroidVersion`, `parsePlatforms`, `imageDigest`
+- `main.go` — struct, `New()`, `WithFlutterVersion`, `WithAndroidVersion`, `WithCmdlineToolsVersion`, `parsePlatforms`, `imageDigest`
 
 When `platform == ""`, `flutterBase`/`androidBase` call `dag.Container()` without a `Platform` option — Dagger uses the engine host's native platform. `Emulator` calls `dag.DefaultPlatform(ctx)` to resolve the ABI.
 
 **EmulatorService networking:** the emulator binds console (5554) and adb (5555) to `127.0.0.1` only. With `ANDROID_EMULATOR_EXPOSE_ADB=true`, `android-start-emulator` starts `socat` forwarders bound to the container's non-loopback IPv4 addresses *after* `sys.boot_completed=1`, so Dagger's port health check implies a booted device. Clients bind the service (e.g. `WithServiceBinding("emulator", svc)`), then `adb connect emulator:5555` and `flutter test -d emulator:5555`. Never use the alias `emu`: adb parses `emu:...` as a `<console port>,<adb port>` pair. KVM requires the Dagger engine itself to see `/dev/kvm`; the script records the chosen mode as device prop `debug.emulator.accel`.
 
-`flutter-container/tests/` is a separate Dagger module (depends on `..`) with `EmulatorScripts`, `EmulatorService` (boots the service, connects via adb, asserts boot + KVM), `VersionOverride` and `All`. Run `dagger call all` from `flutter-container/tests/` after changing the module (run `dagger develop` in both directories first; reset `engineVersion` if it gets bumped).
+`flutter-container/tests/` is a separate Dagger module (depends on `..`) with `EmulatorScripts`, `EmulatorService` (boots the service, connects via adb, asserts boot + KVM), `VersionOverride`, `AndroidToolchain` (Android CLI, licenses, `flutter doctor -v`) and `All`. Run `dagger call all` from `flutter-container/tests/` after changing the module (run `dagger develop` in both directories first; reset `engineVersion` if it gets bumped).
 
 ## flutter module architecture
 

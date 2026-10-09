@@ -37,7 +37,7 @@ func (m *FlutterContainer) Publish(
 	for i, p := range platformList {
 		flutterVariants[i] = flutterBase(p, m.FlutterVersion).
 			WithRegistryAuth(registry, username, password)
-		androidVariants[i] = androidBase(p, m.FlutterVersion).
+		androidVariants[i] = androidBase(p, m.FlutterVersion, m.CmdlineToolsVersion).
 			WithRegistryAuth(registry, username, password)
 	}
 	emu, err := m.Emulator(ctx, PlatformAMD64)

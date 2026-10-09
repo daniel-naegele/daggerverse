@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"dagger/codemagic-cli-tools/internal/dagger"
@@ -112,10 +113,20 @@ func (m *CodemagicCliTools) javaRuntime(platform dagger.Platform) *dagger.Direct
 			"--strip-debug",
 			"--no-man-pages",
 			"--no-header-files",
-			"--compress=zip-6",
+			"--compress=" + jlinkCompression(m.JavaVersion),
 			"--output", "/javaruntime",
 		}).
 		Directory("/javaruntime")
+}
+
+// jlinkCompression returns the strongest jlink --compress value supported by the given JDK major version:
+// JDK 21+ takes zip-<level> (numeric levels are deprecated), older JDKs only know 0-2.
+func jlinkCompression(javaVersion string) string {
+	major, err := strconv.Atoi(strings.SplitN(javaVersion, ".", 2)[0])
+	if err == nil && major < 21 {
+		return "2"
+	}
+	return "zip-6"
 }
 
 // newContainer returns an empty container for the given platform (native if empty).

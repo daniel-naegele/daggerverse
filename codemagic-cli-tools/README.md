@@ -157,8 +157,9 @@ appear in command lines, logs or cache keys. Keystores are mounted (not copied) 
 
 ```sh
 cd tests
-dagger call all     # keystore, android-app-bundle, universal-apk, git-changelog, google-play wiring, exec
-dagger call arm-64  # linux/arm64 image builds and runs (needs emulation on amd64 hosts)
+dagger call all              # keystore, android-app-bundle, universal-apk, git-changelog, google-play wiring, exec, version overrides
+dagger call latest-versions  # Latest*Version return semver (network-dependent, not in all)
+dagger call arm-64           # linux/arm64 image builds and runs (needs emulation on amd64 hosts)
 ```
 
 The App Bundle fixture is `install-time-permanent-modules.aab` from bundletool's own test resources

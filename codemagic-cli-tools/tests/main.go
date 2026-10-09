@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"dagger/tests/internal/dagger"
@@ -36,6 +37,7 @@ func (m *Tests) All(ctx context.Context) error {
 	p.Go(m.GitChangelog)
 	p.Go(m.GooglePlay)
 	p.Go(m.Exec)
+	p.Go(m.VersionOverride)
 
 	return p.Wait()
 }
@@ -354,4 +356,84 @@ func assertZipEntry(ctx context.Context, file *dagger.File, entry string) error 
 			"/tmp/archive.zip", entry}).
 		Sync(ctx)
 	return err
+}
+
+// VersionOverride checks that every With*Version override ends up in the built image.
+func (m *Tests) VersionOverride(ctx context.Context) error {
+	const (
+		codemagicVersion  = "0.69.1"
+		bundletoolVersion = "1.17.2"
+		javaVersion       = "17"
+		pythonVersion     = "3.12"
+	)
+	mod := cm().
+		WithCodemagicVersion(codemagicVersion).
+		WithBundletoolVersion(bundletoolVersion).
+		WithJavaVersion(javaVersion).
+		WithPythonVersion(pythonVersion)
+
+	ctr := mod.Container()
+	check := func(name, want string, args ...string) error {
+		out, err := ctr.WithExec(args).CombinedOutput(ctx)
+		if err != nil {
+			return fmt.Errorf("%s: %w", name, err)
+		}
+		if !strings.Contains(out, want) {
+			return fmt.Errorf("%s: expected %q in output:\n%s", name, want, out)
+		}
+		return nil
+	}
+	for _, c := range []struct {
+		name, want string
+		args       []string
+	}{
+		{"codemagic --version", codemagicVersion, []string{"android-app-bundle", "--version"}},
+		{"pip show", "Version: " + codemagicVersion, []string{"pip", "show", "codemagic-cli-tools"}},
+		{"bundletool version", bundletoolVersion, []string{"bundletool", "version"}},
+		{"java -version", `version "` + javaVersion + `.`, []string{"java", "-version"}},
+		{"python --version", "Python " + pythonVersion + ".", []string{"python", "--version"}},
+	} {
+		if err := check(c.name, c.want, c.args...); err != nil {
+			return err
+		}
+	}
+
+	// codemagic's android-app-bundle must use the overridden bundletool, not its vendored jar.
+	info, err := mod.BundletoolInfo(ctx)
+	if err != nil {
+		return err
+	}
+	var parsed struct{ Version string }
+	if err := json.Unmarshal([]byte(info), &parsed); err != nil {
+		return fmt.Errorf("bundletool info is not JSON: %w\n%s", err, info)
+	}
+	if parsed.Version != bundletoolVersion {
+		return fmt.Errorf("android-app-bundle uses bundletool %q, want %s", parsed.Version, bundletoolVersion)
+	}
+
+	// The overridden toolchain must still work end to end.
+	if _, err := mod.AndroidAppBundle(unsignedFixture()).Validate(ctx); err != nil {
+		return fmt.Errorf("validate with overridden versions: %w", err)
+	}
+	return nil
+}
+
+var semver = regexp.MustCompile(`^\d+\.\d+\.\d+$`)
+
+// LatestVersions checks that the Latest*Version functions return semver-looking versions.
+// Not part of All: it depends on PyPI and GitHub being reachable.
+func (m *Tests) LatestVersions(ctx context.Context) error {
+	for name, get := range map[string]func(context.Context) (string, error){
+		"codemagic-cli-tools": cm().LatestCodemagicVersion,
+		"bundletool":          cm().LatestBundletoolVersion,
+	} {
+		v, err := get(ctx)
+		if err != nil {
+			return fmt.Errorf("latest %s version: %w", name, err)
+		}
+		if !semver.MatchString(v) {
+			return fmt.Errorf("latest %s version %q is not semver", name, v)
+		}
+	}
+	return nil
 }

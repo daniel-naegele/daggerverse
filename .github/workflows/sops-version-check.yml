@@ -1,0 +1,70 @@
+name: Check sops Tool Versions
+
+on:
+  schedule:
+    - cron: '30 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check:
+    name: Check ${{ matrix.tool }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - tool: sops
+            field: SopsVersion
+          - tool: age
+            field: AgeVersion
+          - tool: ssh-to-age
+            field: SshToAgeVersion
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get latest ${{ matrix.tool }} version
+        id: latest
+        uses: dagger/dagger-for-github@v8.4.0
+        with:
+          workdir: sops
+          version: "0.21.7"
+          call: latest-${{ matrix.tool }}-version --token=env:GITHUB_TOKEN
+          cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get current default version
+        id: current
+        run: |
+          version=$(grep -E '^[[:space:]]+${{ matrix.field }}:' sops/main.go | grep -oE '"[^"]+"' | tr -d '"')
+          echo "version=$version" >> $GITHUB_OUTPUT
+
+      - name: Open PR if version changed
+        if: steps.latest.outputs.output != '' && steps.latest.outputs.output != steps.current.outputs.version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TOOL="${{ matrix.tool }}"
+          FIELD="${{ matrix.field }}"
+          NEW="${{ steps.latest.outputs.output }}"
+          BRANCH="sops-version/${TOOL}-${NEW}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git ls-remote --exit-code --heads origin "$BRANCH" > /dev/null 2>&1; then
+            echo "Branch $BRANCH already exists — PR likely already open. Skipping."
+            exit 0
+          fi
+          git checkout -b "$BRANCH"
+          sed -i -E "s/^([[:space:]]+${FIELD}:[[:space:]]*)\"[^\"]*\"/\1\"${NEW}\"/" sops/main.go
+          git add sops/main.go
+          git commit -m "chore(sops): bump default ${TOOL} version to ${NEW}"
+          git push origin "$BRANCH"
+          gh pr create \
+            --title "chore(sops): bump default ${TOOL} version to ${NEW}" \
+            --body "Automated PR: updates the default ${TOOL} version in the sops module from \`${{ steps.current.outputs.version }}\` to \`${NEW}\`." \
+            --base main \
+            --head "$BRANCH"

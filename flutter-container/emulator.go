@@ -59,7 +59,7 @@ func (m *FlutterContainer) Emulator(
 	}
 	abi := emulatorABI(platform)
 
-	return androidBase(platform, m.FlutterVersion).
+	return androidBase(platform, m.FlutterVersion, m.CmdlineToolsVersion).
 		WithEnvVariable("ANDROID_PLATFORM_VERSION", m.AndroidVersion).
 		WithEnvVariable("ANDROID_EMULATOR_NAME", "emulator").
 		WithEnvVariable("ANDROID_EMULATOR_PORT", "5554").
@@ -83,9 +83,13 @@ func (m *FlutterContainer) Emulator(
 				" && break || { [ $i -lt 3 ] && sleep 5; }; done" +
 				" && rm -rf /var/lib/apt/lists/*",
 		}).
+		// The emulator image is linux/amd64 only, so the Android CLI is always
+		// available here (see androidSdkSetup). The AVD is still created with
+		// avdmanager: `android emulator create` only takes a device profile and
+		// cannot set the AVD name, system image or ABI.
 		WithExec([]string{"sh", "-c",
-			`sdkmanager "emulator"` +
-				` && yes | sdkmanager "system-images;android-` + m.AndroidVersion + `;google_apis;` + abi + `"` +
+			`android --no-metrics --sdk="$ANDROID_HOME" sdk install emulator` +
+				` "system-images;android-` + m.AndroidVersion + `;google_apis;` + abi + `"` +
 				` && echo "no" | avdmanager create avd --force --name emulator` +
 				` --abi "google_apis/` + abi + `"` +
 				` --package "system-images;android-` + m.AndroidVersion + `;google_apis;` + abi + `"`,

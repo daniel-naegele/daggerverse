@@ -16,7 +16,7 @@ Pub packages and Gradle files are cached in the `flutter-pub-cache` and `flutter
 | `build-apk` | `flutter build apk` | the `.apk` |
 | `build-app-bundle` | `flutter build appbundle` | the `.aab` |
 | `flutter-image` / `android-image` / `emulator-image` | — | the image used by the functions above, for the configured versions |
-| `integration-test` | `flutter test integration_test` on an emulator | reports directory: `integration-test-results.json`, `junit.xml`, `boot.txt` (boot time, acceleration, API level), `accel-check.txt`, `emulator.log` |
+| `integration-test` | `flutter test integration_test` on an emulator | reports directory: `integration-test-results.json`, `junit.xml`, `boot.txt` (boot time, acceleration, API level), `accel-check.txt`, `emulator.log`, `flutter-test-attempt-N.log` |
 
 Pass the project with `--project .` (or a path to it). `build`, `.dart_tool`, `android/.gradle` and `ios/Pods` are ignored when uploading the project.
 
@@ -118,7 +118,7 @@ See [`testdata/app/android/app/build.gradle.kts`](testdata/app/android/app/build
 
 ## Integration tests and KVM
 
-`integration-test` boots the AVD from the emulator image in the background of the test container (`-no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim`), waits for `sys.boot_completed` (`--boot-timeout`, default 300 s), disables animations and runs `flutter test integration_test -d emulator-5554`. The emulator runs in the same container as the tests because it binds its adb ports to `127.0.0.1`, so a separate Dagger service would not be reachable.
+`integration-test` first builds the debug APK, then boots the AVD with the emulator image's `android-start-emulator` script in the background of the test container (options and behaviour from the image's `ANDROID_EMULATOR_*` env), which waits for `sys.boot_completed` and a responding package manager (`--boot-timeout`, default 300 s) and disables animations. The tests then run with `flutter test integration_test -d emulator-5554`. Each `flutter test` attempt is bounded by `--test-timeout` (default 1200 s). Infrastructure failures (lost VM service/DDS connection, device offline, a hang while waiting for the app's VM service) are retried up to `--attempts` (default 2) after the device is ready again; failing tests are never retried. Every attempt's output is kept as `flutter-test-attempt-N.log`; `--flutter-verbose` runs `flutter test -v`. Running the emulator in the same container (instead of `flutter-container`'s `emulator-service`) keeps adb and the Dart VM service forwarding local, captures the emulator log and gives every call its own emulator.
 
 The emulator needs KVM. The exec runs with insecure root capabilities, but the Dagger engine itself must have `/dev/kvm`: a **rootless** engine (e.g. rootless Podman) runs in a user namespace and drops the device ([dagger/dagger#13827](https://github.com/dagger/dagger/issues/13827)). Use a rootful engine, e.g. with Podman:
 
@@ -127,7 +127,7 @@ sudo systemctl enable --now podman.socket
 CONTAINER_HOST=unix:///run/podman/podman.sock dagger call -m $M integration-test --project .
 ```
 
-Acceleration is checked with `emulator -accel-check` before booting; the function fails with a clear error when KVM is unusable, unless `--require-kvm=false` is passed (software emulation, very slow). The emulator image is `linux/amd64` only.
+Acceleration is checked with `emulator -accel-check` before booting and recorded as `accel=on|off` in `boot.txt`; the function fails with a clear error when KVM is unusable, unless `--require-kvm=false` is passed (software emulation, very slow). The emulator image is `linux/amd64` only.
 
 ## Tests
 

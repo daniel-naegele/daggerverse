@@ -233,7 +233,7 @@ func (m *Tests) IntegrationTest(ctx context.Context) error {
 	if !strings.Contains(boot, "sdk=36") {
 		return fmt.Errorf("emulator does not run the default API level 36: %s", boot)
 	}
-	if !strings.Contains(boot, "accel=kvm") {
+	if !strings.Contains(boot, "accel=on") {
 		return fmt.Errorf("emulator did not use KVM: %s", boot)
 	}
 	junit, err := reports.File("junit.xml").Contents(ctx)

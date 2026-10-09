@@ -1,6 +1,7 @@
 #!/usr/bin/env sh
 # Blocks until the local emulator on the given console port reports
-# sys.boot_completed=1, or fails after the given number of seconds.
+# sys.boot_completed=1 and its package manager responds, or fails after the
+# given number of seconds.
 #
 # Usage: android-wait-for-emulator [console-port] [timeout-seconds]
 set -eu
@@ -20,6 +21,16 @@ fi
 while [ "$(adb -s "${serial}" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" != "1" ]; do
   if [ "$(date +%s)" -ge "${deadline}" ]; then
     echo "android-wait-for-emulator: timeout after ${boot_timeout}s waiting for ${serial} to boot" >&2
+    exit 1
+  fi
+  sleep 2
+done
+
+# sys.boot_completed can be set before the package manager service answers;
+# installs/uninstalls right after boot then fail. Wait until it responds.
+while ! adb -s "${serial}" shell pm path android 2>/dev/null | grep -q '^package:'; do
+  if [ "$(date +%s)" -ge "${deadline}" ]; then
+    echo "android-wait-for-emulator: timeout after ${boot_timeout}s waiting for the package manager on ${serial}" >&2
     exit 1
   fi
   sleep 2

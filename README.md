@@ -10,7 +10,7 @@ Builds Flutter Docker images — flutter base, Android SDK, and emulator — and
 
 ### [flutter](./flutter/)
 
-Dagger CI tasks for Flutter projects: static analysis, unit tests with coverage, Dart Code Metrics, license checks, and Android release builds via Fastlane. Each task accepts an optional prebuilt image from `flutter-container` to skip the local build step.
+Dagger CI tasks for Flutter projects: unit/widget tests (JUnit + coverage), `flutter analyze`, format checks, Android APK/App Bundle builds with release signing, and integration tests on a KVM-accelerated Android emulator. Each task accepts an optional prebuilt image from `flutter-container` to skip the local build step.
 
 ### [quarto](./quarto/)
 

@@ -1,6 +1,6 @@
 module dagger/tests
 
-go 1.26.8
+go 1.26.4
 
 require (
 	github.com/Khan/genqlient v0.8.1

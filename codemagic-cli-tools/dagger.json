@@ -1,6 +1,6 @@
 {
   "name": "codemagic-cli-tools",
-  "engineVersion": "v0.21.10",
+  "engineVersion": "v0.21.7",
   "sdk": {
     "source": "go"
   },

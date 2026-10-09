@@ -1,37 +1,118 @@
-// A generated module for Flutter functions
+// Flutter CI tasks: tests, static analysis, formatting, Android builds and
+// integration tests on an Android emulator.
 //
-// This module has been generated via dagger init and serves as a reference to
-// basic module structure as you get started with Dagger.
-//
-// Two functions have been pre-created. You can modify, delete, or add to them,
-// as needed. They demonstrate usage of arguments and return types using simple
-// echo and grep commands. The functions can be called from the dagger CLI or
-// from one of the SDKs.
-//
-// The first line in this comment block is a short description line and the
-// rest is a long description with more detail on the module's purpose or usage,
-// if appropriate. All modules should have a short description.
+// Images are built by the flutter-container module (Flutter SDK, Android SDK and
+// emulator stages). Every function accepts an optional pre-built image to skip the
+// local image build, e.g. one pulled from ghcr.io/daniel-naegele/flutter.
 
 package main
 
 import (
-	"context"
 	"dagger/flutter/internal/dagger"
 )
 
-type Flutter struct{}
+const (
+	flutterHome  = "/opt/flutter"
+	androidHome  = "/opt/android-sdk-linux"
+	workspaceDir = "/workspace"
+	reportsDir   = "/reports"
+	pubCacheDir  = "/cache/pub"
+	gradleHome   = "/cache/gradle"
+)
 
-// Returns a container that echoes whatever string argument is provided
-func (m *Flutter) ContainerEcho(stringArg string) *dagger.Container {
-	return dag.Container().From("alpine:latest").WithExec([]string{"echo", stringArg})
+type Flutter struct {
+	// Flutter SDK version tag (e.g. "3.47.6").
+	FlutterVersion string
+	// Android platform API level for the emulator system image (e.g. "36").
+	AndroidVersion string
 }
 
-// Returns lines that match a pattern in the files of the provided Directory
-func (m *Flutter) GrepDir(ctx context.Context, directoryArg *dagger.Directory, pattern string) (string, error) {
-	return dag.Container().
-		From("alpine:latest").
-		WithMountedDirectory("/mnt", directoryArg).
-		WithWorkdir("/mnt").
-		WithExec([]string{"grep", "-R", pattern, "."}).
-		Stdout(ctx)
+func New() *Flutter {
+	return &Flutter{
+		FlutterVersion: "3.47.6",
+		AndroidVersion: "36",
+	}
+}
+
+// WithFlutterVersion returns this module configured to use the given Flutter version.
+func (m *Flutter) WithFlutterVersion(version string) *Flutter {
+	m.FlutterVersion = version
+	return m
+}
+
+// WithAndroidVersion returns this module configured to use the given Android API level.
+func (m *Flutter) WithAndroidVersion(version string) *Flutter {
+	m.AndroidVersion = version
+	return m
+}
+
+// images returns the flutter-container module configured with this module's versions.
+func (m *Flutter) images() *dagger.FlutterContainer {
+	return dag.FlutterContainer().
+		WithFlutterVersion(m.FlutterVersion).
+		WithAndroidVersion(m.AndroidVersion)
+}
+
+// flutterCtr returns the Flutter SDK image (or the override) prepared for project.
+func (m *Flutter) flutterCtr(project *dagger.Directory, image *dagger.Container) *dagger.Container {
+	if image == nil {
+		image = m.images().Flutter()
+	}
+	return withProject(image, project)
+}
+
+// androidCtr returns the Android SDK image (or the override) prepared for project.
+func (m *Flutter) androidCtr(project *dagger.Directory, image *dagger.Container) *dagger.Container {
+	if image == nil {
+		image = m.images().Android()
+	}
+	return withGradleCache(withProject(image, project))
+}
+
+// emulatorCtr returns the emulator image (or the override) prepared for project.
+func (m *Flutter) emulatorCtr(project *dagger.Directory, image *dagger.Container) *dagger.Container {
+	if image == nil {
+		image = m.images().Emulator()
+	}
+	return withGradleCache(withProject(image, project))
+}
+
+// withProject mounts the pub cache, copies the project into the workspace and
+// resolves its dependencies.
+func withProject(ctr *dagger.Container, project *dagger.Directory) *dagger.Container {
+	return ctr.
+		WithEnvVariable("PUB_CACHE", pubCacheDir).
+		WithEnvVariable("CI", "true").
+		WithMountedCache(pubCacheDir, dag.CacheVolume("flutter-pub-cache")).
+		WithExec([]string{"flutter", "config", "--no-analytics", "--no-cli-animations"}).
+		WithDirectory(workspaceDir, project).
+		WithWorkdir(workspaceDir).
+		WithExec([]string{"flutter", "pub", "get"})
+}
+
+// withGradleCache mounts a Gradle user home cache and disables the Gradle daemon.
+// The cache is locked so concurrent builds do not fight over Gradle's lock files
+// across container boundaries.
+func withGradleCache(ctr *dagger.Container) *dagger.Container {
+	return ctr.
+		WithEnvVariable("GRADLE_USER_HOME", gradleHome).
+		WithEnvVariable("GRADLE_OPTS", "-Dorg.gradle.daemon=false -Dorg.gradle.vfs.watch=false").
+		WithMountedCache(gradleHome, dag.CacheVolume("flutter-gradle-cache"), dagger.ContainerWithMountedCacheOpts{
+			Sharing: dagger.CacheSharingModeLocked,
+		})
+}
+
+// withJunitReport installs the junitreport package used to convert Dart JSON
+// test reports into JUnit XML.
+func withJunitReport(ctr *dagger.Container) *dagger.Container {
+	return ctr.WithExec([]string{"dart", "pub", "global", "activate", "junitreport"})
+}
+
+// dartDefineArgs turns KEY=VALUE pairs into --dart-define flags.
+func dartDefineArgs(defines []string) []string {
+	args := make([]string, 0, len(defines))
+	for _, d := range defines {
+		args = append(args, "--dart-define="+d)
+	}
+	return args
 }

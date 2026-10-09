@@ -8,8 +8,8 @@ A monorepo of [Dagger](https://dagger.io) modules, each in its own subdirectory 
 
 | Directory | Module name | Purpose |
 |-----------|-------------|---------|
-| `flutter-container/` | `flutter-container` | Main module — builds Flutter Docker images and runs Flutter CI tasks |
-| `flutter/` | `flutter` | Placeholder scaffold (not yet implemented) |
+| `flutter-container/` | `flutter-container` | Builds Flutter Docker images (flutter, android, emulator stages) |
+| `flutter/` | `flutter` | Flutter CI tasks (test, analyze, format, Android builds, emulator integration tests) on top of `flutter-container` images |
 | `quarto/` | `quarto` | Renders Quarto documentation projects; `BuildDocs` is the sensible-default entry point for direct `-m` invocation from consumers with no local Dagger module |
 | `sops/` | `sops` | Minimal sops + age + ssh-to-age image (published multi-arch to `<registry>/sops`) and encrypt/decrypt/keyservice helpers |
 
@@ -51,17 +51,25 @@ When `platform == ""`, `flutterBase`/`androidBase` call `dag.Container()` withou
 
 ## flutter module architecture
 
-Module type: `Flutter`. Same default versions and `With*` pattern as flutter-container.
+Module type: `Flutter`. Same default versions and `With*` pattern as flutter-container. Depends on the local `flutter-container` module (`"source": "../flutter-container"`); images come from `dag.FlutterContainer().WithFlutterVersion(..).WithAndroidVersion(..).Flutter()/Android()/Emulator()`.
 
 **File-per-CI-task layout:**
-- `analyze.go` — `Analyze(ctx, project, netrcToken?, flutterImage?)`: validates analysis preset, returns JUnit XML
-- `test.go` — `Test(ctx, project, netrcToken?, flutterImage?)`: runs coverage, returns JUnit XML + lcov HTML
-- `dcm.go` — `Dcm(ctx, project, dcmEmail, dcmCiKey, dcmVersion?, dcmFatalLevel?, netrcToken?, flutterImage?)`: dart code metrics, returns GitLab Code Quality JSON
-- `license.go` — `LicenseCheck(ctx, project, netrcToken?, flutterImage?)`: runs `license_checker` (advisory if config absent)
-- `build.go` — `BuildAndroid(ctx, project, keystoreFile, gradleProperties, pipelineIid, netrcToken?, androidImage?)`: Fastlane build, returns `.aab`
-- `main.go` — struct, `New()`, `With*`, internal helpers: `flutterBase`, `androidBase`, `flutterCtr`, `androidCtr`, `withFlutterSetup`
+- `test.go` — `Test(ctx, project, targets?, coverage?, ignoreFailures?, flutterImage?) *Directory`: `flutter test` with a JSON file reporter; reports dir with `test-results.json`, `junit.xml` (via `junitreport`'s `tojunit`), optional `lcov.info` + `coverage-html/`
+- `analyze.go` — `Analyze(ctx, project, fatalInfos?, fatalWarnings?=true, flutterImage?) string`: `flutter analyze`
+- `format.go` — `Format(ctx, project, targets?, flutterImage?) string`: `dart format --output=none --set-exit-if-changed`
+- `build.go` — `BuildApk` / `BuildAppBundle(ctx, project, mode?="release", flavor?, target?, buildName?, buildNumber?, dartDefines?, keystore?, storePassword?, keyPassword?, keyAlias?, androidImage?) *File`: with a keystore, writes `android/key.properties` (storePassword, keyPassword, keyAlias, storeFile) on a tmpfs symlinked into `android/`; secrets are mounted with `WithMountedSecret`. The consumer's `android/app/build.gradle(.kts)` must read it
+- `integration.go` — `IntegrationTest(ctx, project, target?="integration_test", flavor?, dartDefines?, bootTimeout?=300, requireKvm?=true, ignoreFailures?, emulatorImage?) *Directory`: boots the AVD in the background of the *same* exec (`InsecureRootCapabilities: true` for `/dev/kvm`; the emulator binds adb to 127.0.0.1, so a separate service is unreachable), checks `emulator -accel-check`, waits for `sys.boot_completed`, disables animations, runs `flutter test <target> -d emulator-5554`. Not named `*_test.go` on purpose (Go would treat it as a test file)
+- `report.go` — `runReporting` (exec with `Expect: Any`, return reports dir, error unless `ignoreFailures`) and `runChecked` (puts command output into the error, since exec stdout is lost across module boundaries)
+- `main.go` — struct, `New()`, `With*`, internal helpers: `flutterCtr`, `androidCtr`, `emulatorCtr`, `withProject` (pub cache volume at `/cache/pub`, copy to `/workspace`, `flutter pub get`), `withGradleCache` (locked cache volume as `GRADLE_USER_HOME`, daemon off)
 
-The optional `flutterImage`/`androidImage` parameters let you supply a pre-built image from the `flutter-container` module instead of building locally.
+The optional `flutterImage`/`androidImage`/`emulatorImage` parameters let you supply a pre-built image (e.g. `ghcr.io/daniel-naegele/flutter:<version>[-android|-emulator]`) instead of building locally.
+
+`flutter/testdata/app` is a trimmed `flutter create` fixture (unit + widget test, `integration_test/`, release signing wired to `key.properties`). `flutter/tests/` is a separate Dagger module (depends on `..` and `../../flutter-container`) with one function per feature plus `All`; it generates a throwaway keystore with `keytool` and verifies signatures with `apksigner`/`jarsigner`.
+
+**Running the emulator tests requires a rootful engine** with `/dev/kvm` (a rootless engine drops devices, dagger/dagger#13827). Locally:
+```bash
+cd flutter/tests && sg podman -c 'CONTAINER_HOST=unix:///run/podman/podman.sock dagger call all'
+```
 
 **Key constants (defined in both modules' `main.go`):**
 ```go

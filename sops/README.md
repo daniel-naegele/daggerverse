@@ -114,7 +114,7 @@ sops decrypt --keyservice tcp://localhost:5000 secrets.enc.yaml
 
 ## Tests
 
-`tests/` is a separate Dagger module that depends on this one. It covers: amd64 and arm64 images, age/SSH/keyservice round trips for YAML, JSON and dotenv, `.sops.yaml` encryption, `--extract`, and failure with a wrong key.
+`tests/` is a separate Dagger module that depends on this one. It covers: amd64 and arm64 images, age/SSH/keyservice round trips for YAML, JSON and dotenv, `.sops.yaml` encryption, `--extract`, and failure with a wrong key. `VersionOverride` builds sops 3.10.2, age 1.3.1 and ssh-to-age 1.2.0 and checks each version. `LatestVersions` is not part of `all`, because it calls the GitHub API without a token, which allows 60 requests per hour.
 
 ```bash
 cd sops/tests && dagger call all

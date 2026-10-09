@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -40,6 +41,7 @@ func (m *Tests) All(ctx context.Context) error {
 	p.Go(m.ConfigEncrypt)
 	p.Go(m.Extract)
 	p.Go(m.DecryptWithoutKeyFails)
+	p.Go(m.VersionOverride)
 
 	return p.Wait()
 }
@@ -297,6 +299,69 @@ func (m *Tests) DecryptWithoutKeyFails(ctx context.Context) error {
 	enc := dag.Sops().Encrypt(testdata("secrets.yaml"), dagger.SopsEncryptOpts{AgeRecipients: []string{pub}})
 	if _, err := dag.Sops().Decrypt(enc, dagger.SopsDecryptOpts{AgeKey: other.PrivateKey()}).Contents(ctx); err == nil {
 		return fmt.Errorf("decrypt with wrong key unexpectedly succeeded")
+	}
+	return nil
+}
+
+// VersionOverride checks that With*Version overrides install the requested binaries.
+//
+//   - sops 3.10.2: verified via "sops --version".
+//   - age 1.3.1: not in the pinned digest table, so this exercises the GitHub
+//     API asset-digest lookup (age releases before 1.3.0 have no recorded
+//     digest and are rejected by design).
+//   - ssh-to-age 1.2.0: that release has no -version flag (and 1.3.0 reports a
+//     stale "1.2.0"), so the installed binary's sha256 is compared with the
+//     release's sha256sums.txt entry instead.
+func (m *Tests) VersionOverride(ctx context.Context) error {
+	ctr := dag.Sops().
+		WithSopsVersion("3.10.2").
+		WithAgeVersion("1.3.1").
+		WithSSHToAgeVersion("1.2.0").
+		Container(dagger.SopsContainerOpts{Platform: "linux/amd64"})
+
+	checks := []struct {
+		cmd  string
+		want string
+	}{
+		{"sops --version", "sops 3.10.2"},
+		{"age --version", "v1.3.1"},
+		{"age-keygen --version", "v1.3.1"},
+		{"sha256sum /usr/local/bin/ssh-to-age", "9980a9b19c9495d446e825a2639b77cb381db30710d50542c835b86e9efaf8e9"},
+	}
+	for _, c := range checks {
+		out, err := ctr.WithExec([]string{"sh", "-c", c.cmd}).Stdout(ctx)
+		if err != nil {
+			return fmt.Errorf("%s: %w", c.cmd, err)
+		}
+		if !strings.Contains(out, c.want) {
+			return fmt.Errorf("%s: want %q, got:\n%s", c.cmd, c.want, out)
+		}
+	}
+	return nil
+}
+
+var semver = regexp.MustCompile(`^\d+\.\d+\.\d+$`)
+
+// LatestVersions checks that the Latest*Version functions return semver strings.
+// Not part of All: it calls the GitHub API unauthenticated (60 requests/hour per IP).
+func (m *Tests) LatestVersions(ctx context.Context) error {
+	s := dag.Sops()
+	sops, err := s.LatestSopsVersion(ctx)
+	if err != nil {
+		return fmt.Errorf("latest sops: %w", err)
+	}
+	age, err := s.LatestAgeVersion(ctx)
+	if err != nil {
+		return fmt.Errorf("latest age: %w", err)
+	}
+	sshToAge, err := s.LatestSSHToAgeVersion(ctx)
+	if err != nil {
+		return fmt.Errorf("latest ssh-to-age: %w", err)
+	}
+	for name, v := range map[string]string{"sops": sops, "age": age, "ssh-to-age": sshToAge} {
+		if !semver.MatchString(v) {
+			return fmt.Errorf("latest %s version %q is not semver", name, v)
+		}
 	}
 	return nil
 }

@@ -2,13 +2,40 @@ package main
 
 import (
 	"context"
+	"embed"
 	"fmt"
-	"strconv"
 
 	"dagger/flutter-container/internal/dagger"
 )
 
-// Emulator returns a container with Flutter, Android tools, and a pre-created AVD.
+// Helper scripts installed into /usr/local/bin of the emulator image.
+//
+//go:embed scripts/*
+var emulatorScripts embed.FS
+
+var emulatorScriptNames = []string{
+	"android-start-emulator",
+	"android-stop-emulator",
+	"android-wait-for-emulator",
+}
+
+// withEmulatorScripts installs the emulator helper scripts as executables.
+func withEmulatorScripts(ctr *dagger.Container) *dagger.Container {
+	for _, name := range emulatorScriptNames {
+		content, err := emulatorScripts.ReadFile("scripts/" + name)
+		if err != nil {
+			// Embedded at compile time; a missing file is a programming error.
+			panic(err)
+		}
+		ctr = ctr.WithNewFile("/usr/local/bin/"+name, string(content),
+			dagger.ContainerWithNewFileOpts{Permissions: 0o755})
+	}
+	return ctr
+}
+
+// Emulator returns a container with Flutter, Android tools, a pre-created AVD and
+// the android-start-emulator / android-stop-emulator / android-wait-for-emulator
+// helper scripts.
 //
 // The ABI is automatically selected based on platform:
 //   - linux/amd64 → x86_64
@@ -42,6 +69,7 @@ func (m *FlutterContainer) Emulator(
 		WithEnvVariable("ANDROID_EMULATOR_DISABLE_SPELLCHECKER", "false").
 		WithEnvVariable("ANDROID_EMULATOR_DISABLE_LINUX_HW_ACCEL", "auto").
 		WithEnvVariable("ANDROID_EMULATOR_ENABLE_HW_KEYBOARD", "false").
+		WithEnvVariable("ANDROID_EMULATOR_EXPOSE_ADB", "false").
 		WithEnvVariable("PATH",
 			androidHome+"/emulator:"+androidHome+"/cmdline-tools/latest/bin:"+androidHome+"/platform-tools:"+
 				flutterHome+"/bin:"+flutterHome+"/bin/cache/dart-sdk/bin:/root/.pub-cache/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin").
@@ -50,6 +78,8 @@ func (m *FlutterContainer) Emulator(
 			"for i in 1 2 3; do apt-get update && apt-get install -y --no-install-recommends" +
 				" libpulse0 libxtst6 libnss3 libnspr4 libxss1 libasound2t64 libxkbfile1" +
 				" libatk-bridge2.0-0 libgtk-3-0 libgdk-pixbuf2.0-0" +
+				// socat forwards the loopback-only emulator ports (see android-start-emulator)
+				" socat" +
 				" && break || { [ $i -lt 3 ] && sleep 5; }; done" +
 				" && rm -rf /var/lib/apt/lists/*",
 		}).
@@ -60,38 +90,24 @@ func (m *FlutterContainer) Emulator(
 				` --abi "google_apis/` + abi + `"` +
 				` --package "system-images;android-` + m.AndroidVersion + `;google_apis;` + abi + `"`,
 		}).
-		WithExec([]string{"sh", "-c",
-			`cat <<'EOF' > /usr/local/bin/android-wait-for-emulator
-#!/usr/bin/env sh
-set -eu
-
-port="${1:-${ANDROID_EMULATOR_PORT:-5554}}"
-timeout="${2:-${ANDROID_EMULATOR_BOOT_TIMEOUT:-600}}"
-serial="emulator-${port}"
-
-adb -s "${serial}" wait-for-device
-
-elapsed=0
-while [ "$(adb -s "${serial}" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" != "1" ]; do
-  elapsed=$((elapsed + 1))
-  if [ "${elapsed}" -ge "${timeout}" ]; then
-    echo "timeout waiting for emulator boot on ${serial}" >&2
-    exit 1
-  fi
-  sleep 1
-done
-
-adb -s "${serial}" shell input keyevent 82 >/dev/null 2>&1 || true
-EOF
-chmod +x /usr/local/bin/android-wait-for-emulator`,
-		}), nil
+		With(withEmulatorScripts), nil
 }
 
-// EmulatorService returns a service with a booted Android emulator ready for adb clients.
+// EmulatorService returns a service running a booted Android emulator that adb
+// clients can connect to over the network.
 //
-// Hardware acceleration behavior matches android-emulator-runner defaults:
-//   - ANDROID_EMULATOR_DISABLE_LINUX_HW_ACCEL=auto: use KVM when /dev/kvm is accessible
-//   - ANDROID_EMULATOR_OPTIONS defaults to headless CI-friendly options
+// The service exposes the emulator console port (port) and adb port (port+1).
+// Both only become reachable once the emulator finished booting, so Dagger's
+// port health check implies a booted device. Bind it to a client container and
+// connect with adb:
+//
+//	ctr.WithServiceBinding("emulator", svc).
+//		WithExec([]string{"adb", "connect", "emulator:5555"})
+//
+// The service runs with insecure root capabilities so /dev/kvm is available
+// for hardware acceleration (ANDROID_EMULATOR_DISABLE_LINUX_HW_ACCEL=auto).
+// Without KVM the x86_64 emulator falls back to software emulation, which is
+// very slow.
 func (m *FlutterContainer) EmulatorService(
 	ctx context.Context,
 	// +optional
@@ -99,6 +115,7 @@ func (m *FlutterContainer) EmulatorService(
 	// +optional
 	// +default="emulator"
 	avdName string,
+	// Emulator console port; the adb port is the console port plus one.
 	// +optional
 	// +default=5554
 	port int,
@@ -114,73 +131,14 @@ func (m *FlutterContainer) EmulatorService(
 		port = 5554
 	}
 
-	portString := strconv.Itoa(port)
 	return emu.
 		WithEnvVariable("ANDROID_EMULATOR_NAME", avdName).
-		WithEnvVariable("ANDROID_EMULATOR_PORT", portString).
-		WithExec([]string{"sh", "-c",
-			`cat <<'EOF' > /usr/local/bin/android-stop-emulator
-#!/usr/bin/env sh
-set -eu
-
-port="${1:-${ANDROID_EMULATOR_PORT:-5554}}"
-adb -s "emulator-${port}" emu kill >/dev/null 2>&1 || true
-EOF
-chmod +x /usr/local/bin/android-stop-emulator`,
-		}).
-		WithExec([]string{"sh", "-c",
-			`cat <<'EOF' > /usr/local/bin/android-start-emulator
-#!/usr/bin/env sh
-set -eu
-
-name="${ANDROID_EMULATOR_NAME:-emulator}"
-port="${ANDROID_EMULATOR_PORT:-5554}"
-disable_linux_hw_accel="${ANDROID_EMULATOR_DISABLE_LINUX_HW_ACCEL:-auto}"
-disable_animations="${ANDROID_EMULATOR_DISABLE_ANIMATIONS:-true}"
-disable_spellchecker="${ANDROID_EMULATOR_DISABLE_SPELLCHECKER:-false}"
-enable_hw_keyboard="${ANDROID_EMULATOR_ENABLE_HW_KEYBOARD:-false}"
-emulator_options="${ANDROID_EMULATOR_OPTIONS:--no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none}"
-
-if [ "${disable_linux_hw_accel}" = "auto" ]; then
-  if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
-    disable_linux_hw_accel="false"
-  else
-    disable_linux_hw_accel="true"
-  fi
-fi
-
-if [ "${disable_linux_hw_accel}" = "true" ]; then
-  emulator_options="${emulator_options} -accel off"
-fi
-
-"${ANDROID_HOME}/emulator/emulator" -port "${port}" -avd "${name}" ${emulator_options} &
-emulator_pid="$!"
-serial="emulator-${port}"
-
-trap 'android-stop-emulator "${port}"; wait "${emulator_pid}" 2>/dev/null || true' INT TERM EXIT
-
-android-wait-for-emulator "${port}"
-
-if [ "${disable_animations}" = "true" ]; then
-  adb -s "${serial}" shell settings put global window_animation_scale 0.0
-  adb -s "${serial}" shell settings put global transition_animation_scale 0.0
-  adb -s "${serial}" shell settings put global animator_duration_scale 0.0
-fi
-
-if [ "${disable_spellchecker}" = "true" ]; then
-  adb -s "${serial}" shell settings put secure spell_checker_enabled 0
-fi
-
-if [ "${enable_hw_keyboard}" = "true" ]; then
-  adb -s "${serial}" shell settings put secure show_ime_with_hard_keyboard 0
-fi
-
-wait "${emulator_pid}"
-EOF
-chmod +x /usr/local/bin/android-start-emulator`,
-		}).
-		WithEntrypoint([]string{"android-start-emulator"}).
-		WithExposedPort(port).
-		WithExposedPort(port + 1).
-		AsService(), nil
+		WithEnvVariable("ANDROID_EMULATOR_PORT", fmt.Sprint(port)).
+		WithEnvVariable("ANDROID_EMULATOR_EXPOSE_ADB", "true").
+		WithExposedPort(port, dagger.ContainerWithExposedPortOpts{Description: "emulator console"}).
+		WithExposedPort(port+1, dagger.ContainerWithExposedPortOpts{Description: "adb"}).
+		AsService(dagger.ContainerAsServiceOpts{
+			Args:                     []string{"android-start-emulator"},
+			InsecureRootCapabilities: true,
+		}), nil
 }

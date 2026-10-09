@@ -1,0 +1,14 @@
+{
+  "name": "tests",
+  "engineVersion": "v0.21.7",
+  "sdk": {
+    "source": "go"
+  },
+  "dependencies": [
+    {
+      "name": "flutter-container",
+      "source": ".."
+    }
+  ],
+  "disableDefaultFunctionCaching": true
+}

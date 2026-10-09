@@ -1,0 +1,31 @@
+#!/usr/bin/env sh
+# Blocks until the local emulator on the given console port reports
+# sys.boot_completed=1, or fails after the given number of seconds.
+#
+# Usage: android-wait-for-emulator [console-port] [timeout-seconds]
+set -eu
+
+port="${1:-${ANDROID_EMULATOR_PORT:-5554}}"
+boot_timeout="${2:-${ANDROID_EMULATOR_BOOT_TIMEOUT:-600}}"
+serial="emulator-${port}"
+
+start="$(date +%s)"
+deadline=$((start + boot_timeout))
+
+if ! timeout "${boot_timeout}" adb -s "${serial}" wait-for-device; then
+  echo "android-wait-for-emulator: timeout after ${boot_timeout}s waiting for ${serial} to appear" >&2
+  exit 1
+fi
+
+while [ "$(adb -s "${serial}" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" != "1" ]; do
+  if [ "$(date +%s)" -ge "${deadline}" ]; then
+    echo "android-wait-for-emulator: timeout after ${boot_timeout}s waiting for ${serial} to boot" >&2
+    exit 1
+  fi
+  sleep 2
+done
+
+echo "android-wait-for-emulator: ${serial} booted after $(($(date +%s) - start))s"
+
+# Unlock the screen.
+adb -s "${serial}" shell input keyevent 82 >/dev/null 2>&1 || true

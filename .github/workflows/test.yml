@@ -1,0 +1,78 @@
+name: Test
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: test-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Detect changed modules
+    runs-on: ubuntu-latest
+    outputs:
+      modules: ${{ github.event_name == 'workflow_dispatch' && '["flutter-container","quarto"]' || steps.filter.outputs.changes }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # One filter per module that has a tests/ submodule. A module's tests also
+      # run when this workflow changes. On workflow_dispatch, everything runs.
+      - name: Filter paths
+        id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            flutter-container:
+              - 'flutter-container/**'
+              - '.github/workflows/test.yml'
+            quarto:
+              - 'quarto/**'
+              - '.github/workflows/test.yml'
+
+  test:
+    name: Test ${{ matrix.module }}
+    needs: changes
+    if: needs.changes.outputs.modules != '[]' && needs.changes.outputs.modules != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJSON(needs.changes.outputs.modules) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Flutter/Android/emulator images need far more space than the runner has free.
+      - name: Free Disk Space
+        uses: jlumbroso/free-disk-space@v1.3.0
+        with:
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          swap-storage: true
+
+      # Same setup as reactivecircus/android-emulator-runner. Must run before the
+      # Dagger engine starts: the privileged engine container snapshots /dev at
+      # startup, and emulator execs get /dev/kvm via insecureRootCapabilities.
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm
+
+      - name: Run dagger tests
+        uses: dagger/dagger-for-github@v8.4.0
+        with:
+          workdir: ${{ matrix.module }}/tests
+          version: "0.21.7"
+          call: all
+          cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}

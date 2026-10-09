@@ -1,0 +1,103 @@
+#!/usr/bin/env sh
+# Starts the emulator, waits for boot, applies post-boot settings and then
+# blocks until the emulator exits.
+#
+# When ANDROID_EMULATOR_EXPOSE_ADB=true, the emulator console port and adb
+# port (console port + 1) are forwarded from every non-loopback IPv4 address
+# of the container to the emulator's 127.0.0.1 listeners. Forwarding starts
+# only after boot completed, so a successful TCP connect on those ports
+# implies a booted device. Remote clients connect with
+# `adb connect <host>:<console port + 1>`.
+set -eu
+
+name="${ANDROID_EMULATOR_NAME:-emulator}"
+port="${ANDROID_EMULATOR_PORT:-5554}"
+adb_port=$((port + 1))
+disable_linux_hw_accel="${ANDROID_EMULATOR_DISABLE_LINUX_HW_ACCEL:-auto}"
+disable_animations="${ANDROID_EMULATOR_DISABLE_ANIMATIONS:-true}"
+disable_spellchecker="${ANDROID_EMULATOR_DISABLE_SPELLCHECKER:-false}"
+enable_hw_keyboard="${ANDROID_EMULATOR_ENABLE_HW_KEYBOARD:-false}"
+expose_adb="${ANDROID_EMULATOR_EXPOSE_ADB:-false}"
+emulator_options="${ANDROID_EMULATOR_OPTIONS:--no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none}"
+emulator_bin="${ANDROID_HOME}/emulator/emulator"
+serial="emulator-${port}"
+
+log() {
+  echo "android-start-emulator: $*"
+}
+
+if accel_check="$("${emulator_bin}" -accel-check 2>&1)"; then
+  accel_usable=true
+else
+  accel_usable=false
+fi
+log "accel-check: $(echo "${accel_check}" | tr '\n' ' ')"
+
+if [ "${disable_linux_hw_accel}" = "auto" ]; then
+  if [ -r /dev/kvm ] && [ -w /dev/kvm ] && [ "${accel_usable}" = "true" ]; then
+    disable_linux_hw_accel="false"
+  else
+    disable_linux_hw_accel="true"
+  fi
+fi
+
+if [ "${disable_linux_hw_accel}" = "true" ]; then
+  emulator_options="${emulator_options} -accel off"
+  accel_mode="off"
+else
+  accel_mode="on"
+fi
+log "hardware acceleration ${accel_mode}"
+
+# shellcheck disable=SC2086 # emulator_options is intentionally word-split
+"${emulator_bin}" -port "${port}" -avd "${name}" ${emulator_options} &
+emulator_pid="$!"
+forward_pids=""
+
+cleanup() {
+  for pid in ${forward_pids}; do
+    kill "${pid}" 2>/dev/null || true
+  done
+  android-stop-emulator "${port}"
+  wait "${emulator_pid}" 2>/dev/null || true
+}
+trap cleanup EXIT
+trap 'exit 143' INT TERM
+
+android-wait-for-emulator "${port}"
+
+if [ "${disable_animations}" = "true" ]; then
+  adb -s "${serial}" shell settings put global window_animation_scale 0.0
+  adb -s "${serial}" shell settings put global transition_animation_scale 0.0
+  adb -s "${serial}" shell settings put global animator_duration_scale 0.0
+fi
+
+if [ "${disable_spellchecker}" = "true" ]; then
+  adb -s "${serial}" shell settings put secure spell_checker_enabled 0
+fi
+
+if [ "${enable_hw_keyboard}" = "true" ]; then
+  adb -s "${serial}" shell settings put secure show_ime_with_hard_keyboard 0
+fi
+
+# Record the acceleration mode on the device so adb clients can inspect it.
+adb -s "${serial}" shell setprop debug.emulator.accel "${accel_mode}" || true
+
+if [ "${expose_adb}" = "true" ]; then
+  # The emulator only listens on 127.0.0.1. Bind the forwarders to the
+  # container's own addresses so they do not clash with those listeners.
+  for addr in $(hostname -I); do
+    case "${addr}" in
+      *:*) continue ;; # skip IPv6
+    esac
+    for p in "${port}" "${adb_port}"; do
+      socat "TCP-LISTEN:${p},bind=${addr},fork,reuseaddr" "TCP:127.0.0.1:${p}" &
+      forward_pids="${forward_pids} $!"
+    done
+    log "forwarding ${addr}:${port} (console) and ${addr}:${adb_port} (adb) to 127.0.0.1"
+  done
+fi
+
+log "emulator ready (${serial})"
+
+wait "${emulator_pid}"

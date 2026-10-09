@@ -1,0 +1,8 @@
+#!/usr/bin/env sh
+# Gracefully shuts down the local emulator on the given console port.
+#
+# Usage: android-stop-emulator [console-port]
+set -eu
+
+port="${1:-${ANDROID_EMULATOR_PORT:-5554}}"
+adb -s "emulator-${port}" emu kill >/dev/null 2>&1 || true

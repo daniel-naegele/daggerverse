@@ -25,7 +25,7 @@ Both `linux/amd64` and `linux/arm64` are supported (emulator: `linux/amd64` only
 The emulator image includes startup helpers modeled after `reactivecircus/android-emulator-runner` defaults:
 
 - `android-start-emulator` (boot + wait + optional animation/spellchecker/keyboard tweaks, optional adb forwarding)
-- `android-wait-for-emulator [port] [timeout-seconds]` (waits on `sys.boot_completed`, timeout in wall-clock seconds)
+- `android-wait-for-emulator [port] [timeout-seconds]` (waits on `sys.boot_completed` and a responding package manager, timeout in wall-clock seconds)
 - `android-stop-emulator` (graceful `adb emu kill`)
 
 Default env values mirror the action's CI defaults:

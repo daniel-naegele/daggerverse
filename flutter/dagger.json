@@ -4,11 +4,10 @@
   "sdk": {
     "source": "go"
   },
-  "toolchains": [
+  "dependencies": [
     {
       "name": "flutter-container",
-      "source": "github.com/daniel-naegele/daggerverse/flutter-container@main",
-      "pin": "c1726f379484cbd7c24af3b1997e5cac894db069"
+      "source": "../flutter-container"
     }
   ]
 }

@@ -15,7 +15,8 @@ Pub packages and Gradle files are cached in the `flutter-pub-cache` and `flutter
 | `format` | `dart format --set-exit-if-changed` | formatter output |
 | `build-apk` | `flutter build apk` | the `.apk` |
 | `build-app-bundle` | `flutter build appbundle` | the `.aab` |
-| `integration-test` | `flutter test integration_test` on an emulator | reports directory: `integration-test-results.json`, `junit.xml`, `boot.txt`, `accel-check.txt`, `emulator.log` |
+| `flutter-image` / `android-image` / `emulator-image` | — | the image used by the functions above, for the configured versions |
+| `integration-test` | `flutter test integration_test` on an emulator | reports directory: `integration-test-results.json`, `junit.xml`, `boot.txt` (boot time, acceleration, API level), `accel-check.txt`, `emulator.log` |
 
 Pass the project with `--project .` (or a path to it). `build`, `.dart_tool`, `android/.gradle` and `ios/Pods` are ignored when uploading the project.
 
@@ -54,6 +55,10 @@ dagger call -m $M integration-test --project . export --path reports
 
 # Use a specific Flutter version / Android API level
 dagger call -m $M with-flutter-version --version 3.47.6 with-android-version --version 35 test --project .
+
+# `--android-version` selects the emulator system image (API level) for integration tests;
+# Android builds take compileSdk/targetSdk from the project and the Flutter Gradle plugin.
+dagger call -m $M with-android-version --version 35 integration-test --project .
 
 # Use a prebuilt image instead of building one
 dagger call -m $M analyze --project . --flutter-image ghcr.io/daniel-naegele/flutter:3.47.6

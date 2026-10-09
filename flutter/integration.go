@@ -70,7 +70,8 @@ while :; do
   sleep 2
 done
 boot_seconds=$(( $(date +%s) - start ))
-echo "emulator booted in ${boot_seconds}s (accel=${accel})" | tee ` + reportsDir + `/boot.txt
+sdk="$(adb -s "$serial" shell getprop ro.build.version.sdk | tr -d '\r')"
+echo "emulator booted in ${boot_seconds}s (accel=${accel}, sdk=${sdk})" | tee ` + reportsDir + `/boot.txt
 
 adb -s "$serial" shell settings put global window_animation_scale 0
 adb -s "$serial" shell settings put global transition_animation_scale 0
@@ -101,7 +102,7 @@ exit $status
 // requireKvm is false.
 //
 // Returns a reports directory with integration-test-results.json, junit.xml,
-// accel-check.txt, boot.txt (boot time) and emulator.log.
+// accel-check.txt, boot.txt (boot time, acceleration, API level) and emulator.log.
 func (m *Flutter) IntegrationTest(
 	ctx context.Context,
 	// Flutter project directory.

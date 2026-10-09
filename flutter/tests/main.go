@@ -45,6 +45,7 @@ func (m *Tests) All(ctx context.Context) error {
 	p.Go(m.ApkRelease)
 	p.Go(m.AppBundleRelease)
 	p.Go(m.IntegrationTest)
+	p.Go(m.VersionOverride)
 
 	return p.Wait()
 }
@@ -229,6 +230,9 @@ func (m *Tests) IntegrationTest(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("boot.txt: %w", err)
 	}
+	if !strings.Contains(boot, "sdk=36") {
+		return fmt.Errorf("emulator does not run the default API level 36: %s", boot)
+	}
 	if !strings.Contains(boot, "accel=kvm") {
 		return fmt.Errorf("emulator did not use KVM: %s", boot)
 	}
@@ -243,6 +247,126 @@ func (m *Tests) IntegrationTest(ctx context.Context) error {
 		return fmt.Errorf("junit.xml contains failures:\n%s", junit)
 	}
 	return nil
+}
+
+const (
+	oldFlutterVersion = "3.41.9"
+	oldAndroidVersion = "35"
+)
+
+// versionProbe is a minimal project that works on older Flutter SDKs. Its only
+// test is named after the SDK version it runs on, so the JUnit report shows
+// which SDK Test used.
+func versionProbe() *dagger.Directory {
+	return dag.Directory().
+		WithNewFile("pubspec.yaml", `name: version_probe
+publish_to: 'none'
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+`).
+		WithNewFile("test/version_test.dart", `import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+
+String sdkVersion() {
+  final root = Platform.environment['FLUTTER_ROOT']!;
+  final json = File('$root/bin/cache/flutter.version.json');
+  if (json.existsSync()) {
+    final data = jsonDecode(json.readAsStringSync()) as Map<String, dynamic>;
+    return data['frameworkVersion'] as String;
+  }
+  return File('$root/version').readAsStringSync().trim();
+}
+
+void main() {
+  final version = sdkVersion();
+  test('runs on flutter $version', () {
+    expect(version, isNotEmpty);
+  });
+}
+`)
+}
+
+// VersionOverride checks that WithFlutterVersion selects the Flutter SDK used by
+// the image and by Test/Analyze, and that WithAndroidVersion selects the
+// emulator system image and the API level the integration tests run on.
+// (AndroidVersion does not affect Android builds: compileSdk/targetSdk come from
+// the project and the Flutter Gradle plugin.)
+func (m *Tests) VersionOverride(ctx context.Context) error {
+	p := pool.New().WithErrors().WithContext(ctx)
+
+	p.Go(func(ctx context.Context) error {
+		out, err := dag.Flutter().WithFlutterVersion(oldFlutterVersion).
+			FlutterImage().
+			WithExec([]string{"flutter", "--version"}).
+			Stdout(ctx)
+		if err != nil {
+			return err
+		}
+		if !strings.Contains(out, "Flutter "+oldFlutterVersion) {
+			return fmt.Errorf("flutter --version does not report %s:\n%s", oldFlutterVersion, out)
+		}
+		return nil
+	})
+
+	p.Go(func(ctx context.Context) error {
+		junit, err := dag.Flutter().WithFlutterVersion(oldFlutterVersion).
+			Test(versionProbe()).
+			File("junit.xml").
+			Contents(ctx)
+		if err != nil {
+			return err
+		}
+		if !strings.Contains(junit, "runs on flutter "+oldFlutterVersion) {
+			return fmt.Errorf("Test did not run on Flutter %s:\n%s", oldFlutterVersion, junit)
+		}
+		return nil
+	})
+
+	p.Go(func(ctx context.Context) error {
+		_, err := dag.Flutter().WithFlutterVersion(oldFlutterVersion).
+			Analyze(ctx, versionProbe(), dagger.FlutterAnalyzeOpts{FatalInfos: true})
+		return err
+	})
+
+	p.Go(func(ctx context.Context) error {
+		emu := dag.Flutter().WithAndroidVersion(oldAndroidVersion).EmulatorImage()
+		env, err := emu.EnvVariable(ctx, "ANDROID_PLATFORM_VERSION")
+		if err != nil {
+			return err
+		}
+		if env != oldAndroidVersion {
+			return fmt.Errorf("ANDROID_PLATFORM_VERSION is %q, want %q", env, oldAndroidVersion)
+		}
+		cfg, err := emu.File("/root/.android/avd/emulator.avd/config.ini").Contents(ctx)
+		if err != nil {
+			return err
+		}
+		if !strings.Contains(cfg, "system-images/android-"+oldAndroidVersion+"/") {
+			return fmt.Errorf("AVD does not use the android-%s system image:\n%s", oldAndroidVersion, cfg)
+		}
+		return nil
+	})
+
+	p.Go(func(ctx context.Context) error {
+		boot, err := dag.Flutter().WithAndroidVersion(oldAndroidVersion).
+			IntegrationTest(m.App).
+			File("boot.txt").
+			Contents(ctx)
+		if err != nil {
+			return err
+		}
+		if !strings.Contains(boot, "sdk="+oldAndroidVersion) {
+			return fmt.Errorf("integration tests did not run on API level %s: %s", oldAndroidVersion, boot)
+		}
+		return nil
+	})
+
+	return p.Wait()
 }
 
 // verifier returns the Android SDK image (keytool, jarsigner, apksigner).

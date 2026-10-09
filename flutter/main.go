@@ -53,10 +53,25 @@ func (m *Flutter) images() *dagger.FlutterContainer {
 		WithAndroidVersion(m.AndroidVersion)
 }
 
+// FlutterImage returns the Flutter SDK image used by Test, Analyze and Format.
+func (m *Flutter) FlutterImage() *dagger.Container {
+	return m.images().Flutter()
+}
+
+// AndroidImage returns the Flutter + Android SDK image used by BuildApk and BuildAppBundle.
+func (m *Flutter) AndroidImage() *dagger.Container {
+	return m.images().Android()
+}
+
+// EmulatorImage returns the emulator image (AVD for AndroidVersion) used by IntegrationTest.
+func (m *Flutter) EmulatorImage() *dagger.Container {
+	return m.images().Emulator()
+}
+
 // flutterCtr returns the Flutter SDK image (or the override) prepared for project.
 func (m *Flutter) flutterCtr(project *dagger.Directory, image *dagger.Container) *dagger.Container {
 	if image == nil {
-		image = m.images().Flutter()
+		image = m.FlutterImage()
 	}
 	return withProject(image, project)
 }
@@ -64,7 +79,7 @@ func (m *Flutter) flutterCtr(project *dagger.Directory, image *dagger.Container)
 // androidCtr returns the Android SDK image (or the override) prepared for project.
 func (m *Flutter) androidCtr(project *dagger.Directory, image *dagger.Container) *dagger.Container {
 	if image == nil {
-		image = m.images().Android()
+		image = m.AndroidImage()
 	}
 	return withGradleCache(withProject(image, project))
 }
@@ -72,7 +87,7 @@ func (m *Flutter) androidCtr(project *dagger.Directory, image *dagger.Container)
 // emulatorCtr returns the emulator image (or the override) prepared for project.
 func (m *Flutter) emulatorCtr(project *dagger.Directory, image *dagger.Container) *dagger.Container {
 	if image == nil {
-		image = m.images().Emulator()
+		image = m.EmulatorImage()
 	}
 	return withGradleCache(withProject(image, project))
 }

@@ -12,6 +12,7 @@ A monorepo of [Dagger](https://dagger.io) modules, each in its own subdirectory 
 | `flutter/` | `flutter` | Flutter CI tasks (test, analyze, format, Android builds, emulator integration tests) on top of `flutter-container` images |
 | `quarto/` | `quarto` | Renders Quarto documentation projects; `BuildDocs` is the sensible-default entry point for direct `-m` invocation from consumers with no local Dagger module |
 | `sops/` | `sops` | Minimal sops + age + ssh-to-age image (published multi-arch to `<registry>/sops`) and encrypt/decrypt/keyservice helpers |
+| `codemagic-cli-tools/` | `codemagic-cli-tools` | Minimal multi-arch image with [Codemagic CLI tools](https://github.com/codemagic-ci-cd/cli-tools) + typed wrappers for google-play, android-app-bundle, android-keystore, universal-apk, git-changelog |
 
 ## Common commands
 
@@ -98,6 +99,21 @@ Module type: `Sops`. Pinned defaults in `New()`: `SopsVersion` `3.13.3`, `AgeVer
 - `publish.go` — `Publish(registry, username, password, platforms?)` pushes `<registry>/sops:<SopsVersion>` and `:latest`; run by `.github/workflows/sops-publish.yml` on pushes to `main` touching `sops/**`.
 
 `sops/tests/` is a separate Dagger module (pattern of `quarto/tests`); run `dagger call all` from there after changes.
+
+## codemagic-cli-tools module architecture
+
+Module type: `CodemagicCliTools`. Pinned defaults as struct fields set in `New()`: `CodemagicVersion` (PyPI), `BundletoolVersion` (google/bundletool releases), `PythonVersion` (`python:<v>-slim-trixie`), `JavaVersion` (Temurin JDK major, jlink'ed). Override via `WithCodemagicVersion` / `WithBundletoolVersion` / `WithPythonVersion` / `WithJavaVersion`.
+
+- `container.go` — `Container(platform?)`: python slim + git + jlink'ed JRE (`/opt/java`, includes keytool + jarsigner via `jdk.jartool`) + pinned bundletool (`/opt/bundletool/bundletool.jar`, `bundletool` wrapper; codemagic's vendored jar is replaced by a symlink) + `pip install codemagic-cli-tools`; runs as `codemagic` (uid 1000) in `/workspace`. bundletool's `aapt2` is x86_64-only → APK generation works on amd64 only.
+- `android_app_bundle.go` — `AndroidAppBundle(bundle)` object: `Dump`, `Validate`, `IsSigned`, `Sign`, `BuildApks`, `BuildUniversalApk`; plus `BundletoolInfo`. Shared `withSigning`/`withOptionalSigning` helpers.
+- `android_keystore.go` — `CreateKeystore(...) *File`; `AndroidKeystore(keystore, password, alias)` object: `Verify`, `Certificate`.
+- `google_play.go` — `GooglePlay(credentials)` object: `LatestBuildNumber`, `PublishBundle`, `UploadBundle`, `UploadToInternalAppSharing`, `PromoteRelease`, `GetTrack`, `ListTracks`.
+- `git_changelog.go` — `GitChangelog(source, ...)`; `universal_apk.go` — deprecated `UniversalApk`.
+- `main.go` — struct, `New()`, `With*`, `Exec(args, source?, secretEnv?, secrets?)` escape hatch, `wrapExecError`/`output` helpers (surface codemagic's stderr in errors).
+- `version.go` — `LatestCodemagicVersion` (PyPI JSON) / `LatestBundletoolVersion` (GitHub releases/latest redirect), used by `.github/workflows/codemagic-cli-tools-version-check.yml` (opens bump PRs, skips if branch exists).
+- `publish.go` — `Publish(ctx, registry, username, password, platforms?)` pushes `<registry>/codemagic-cli-tools:<CodemagicVersion>`; run by `.github/workflows/codemagic-cli-tools-publish.yml` on pushes to main touching `codemagic-cli-tools/**`.
+
+Secrets are never plain args: they are set with `WithSecretVariable` and passed to codemagic as `@env:<NAME>` references. `codemagic-cli-tools/tests/` is a separate module (depends on `..`, like `quarto/tests`): run `dagger call all` (and `dagger call arm-64` for the arm64 image) from there after changes.
 
 ## Generated files — do not edit
 

@@ -27,3 +27,12 @@ Minimal multi-arch image with [sops](https://github.com/getsops/sops), [age](htt
 ```bash
 dagger call -m github.com/daniel-naegele/daggerverse/sops decrypt --file secrets.enc.yaml --age-key env:SOPS_AGE_KEY export --path secrets.yaml
 ```
+
+### [codemagic-cli-tools](./codemagic-cli-tools/)
+
+Minimal multi-arch image with [Codemagic CLI tools](https://github.com/codemagic-ci-cd/cli-tools), a jlink'ed Java runtime, bundletool and git, published to `ghcr.io/daniel-naegele/codemagic-cli-tools`. Typed Dagger functions for Google Play publishing, App Bundle inspection/signing/APK generation, keystores and changelogs:
+
+```bash
+dagger call -m github.com/daniel-naegele/daggerverse/codemagic-cli-tools \
+  google-play --credentials env:GOOGLE_PLAY_CREDENTIALS publish-bundle --bundle app.aab --track internal
+```

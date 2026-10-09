@@ -1,0 +1,20 @@
+{
+  "name": "tests",
+  "engineVersion": "v0.21.10",
+  "sdk": {
+    "source": "go"
+  },
+  "include": [
+    "!../../.direnv",
+    "!../../.devenv",
+    "!../../go.work",
+    "!../../go.work.sum"
+  ],
+  "dependencies": [
+    {
+      "name": "codemagic-cli-tools",
+      "source": ".."
+    }
+  ],
+  "disableDefaultFunctionCaching": true
+}

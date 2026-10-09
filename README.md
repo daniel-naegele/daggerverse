@@ -19,3 +19,11 @@ Renders [Quarto](https://quarto.org) documentation projects. `Render` wraps `qua
 ```bash
 dagger call -m github.com/daniel-naegele/daggerverse/quarto build-docs --source . export --path public
 ```
+
+### [sops](./sops/)
+
+Minimal multi-arch image with [sops](https://github.com/getsops/sops), [age](https://github.com/FiloSottile/age) and [ssh-to-age](https://github.com/Mic92/ssh-to-age) (published as `ghcr.io/daniel-naegele/sops`), plus Dagger functions to encrypt with public keys only, decrypt with age or SSH ed25519 keys, and run a sops keyservice so other containers can decrypt without holding the key:
+
+```bash
+dagger call -m github.com/daniel-naegele/daggerverse/sops decrypt --file secrets.enc.yaml --age-key env:SOPS_AGE_KEY export --path secrets.yaml
+```

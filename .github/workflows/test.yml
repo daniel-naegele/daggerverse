@@ -17,7 +17,7 @@ jobs:
     name: Detect changed modules
     runs-on: ubuntu-latest
     outputs:
-      modules: ${{ github.event_name == 'workflow_dispatch' && '["flutter-container","quarto"]' || steps.filter.outputs.changes }}
+      modules: ${{ github.event_name == 'workflow_dispatch' && '["flutter-container","quarto","sops"]' || steps.filter.outputs.changes }}
     steps:
       - uses: actions/checkout@v4
 
@@ -34,6 +34,9 @@ jobs:
               - '.github/workflows/test.yml'
             quarto:
               - 'quarto/**'
+              - '.github/workflows/test.yml'
+            sops:
+              - 'sops/**'
               - '.github/workflows/test.yml'
 
   test:

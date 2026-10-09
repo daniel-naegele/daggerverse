@@ -11,6 +11,7 @@ A monorepo of [Dagger](https://dagger.io) modules, each in its own subdirectory 
 | `flutter-container/` | `flutter-container` | Main module — builds Flutter Docker images and runs Flutter CI tasks |
 | `flutter/` | `flutter` | Placeholder scaffold (not yet implemented) |
 | `quarto/` | `quarto` | Renders Quarto documentation projects; `BuildDocs` is the sensible-default entry point for direct `-m` invocation from consumers with no local Dagger module |
+| `sops/` | `sops` | Minimal sops + age + ssh-to-age image (published multi-arch to `<registry>/sops`) and encrypt/decrypt/keyservice helpers |
 
 ## Common commands
 
@@ -77,6 +78,18 @@ Module type: `Quarto`, wrapping a `Ctr *dagger.Container` built from the officia
 - `BuildDocs(ctx, source, docsDir?) *dagger.Directory` — thin wrapper around `Render(source.Directory(docsDir)).Directory()`. `docsDir` defaults to `"docs"`. `source` is `+defaultPath="."`, which only auto-resolves to the caller's working directory when this module is the one loaded directly (no `-m`, `dagger.json` in cwd); when loaded via `-m` (local path or remote ref), the default-path context resolves relative to the *loaded* module instead, so callers must pass `--source .` explicitly (verified empirically — omitting it fails with "stat docs: no such file or directory" against the quarto module's own tree). This is the function meant to be called directly by consumers via `dagger call -m github.com/daniel-naegele/daggerverse/quarto build-docs --source .`, without adding this module as a dependency — for consumers that need custom composition beyond "render one directory" (e.g. merging in separately-generated content), install it as a real dependency instead (`dagger install github.com/daniel-naegele/daggerverse/quarto`) and call `Render`/`BuildDocs` directly from Go.
 
 `quarto/tests/` is a separate Dagger module (depends on `quarto` via a local path, `"source": ".."`) that exercises the module against the `testdata/` fixture — run `dagger call all` from `quarto/tests/` after changing `quarto/main.go` (and running `dagger develop` in both `quarto/` and `quarto/tests/` to regenerate bindings).
+
+## sops module architecture
+
+Module type: `Sops`. Pinned defaults in `New()`: `SopsVersion` `3.13.3`, `AgeVersion` `1.3.2`, `SshToAgeVersion` `1.3.0` (no `v` prefix); override via `WithSopsVersion` / `WithAgeVersion` / `WithSshToAgeVersion`.
+
+- `container.go` — `Container(platform?)`: `alpine:3.24.2` + static `sops`, `age`, `age-keygen`, `ssh-to-age` from GitHub releases, verified via `dag.HTTP(..., Checksum)`. sops/ssh-to-age checksums come from the release checksum files; age publishes none, so digests come from `knownAgeDigests` (pinned) or the GitHub API asset `digest` field. Entrypoint `sops`, workdir `/work`. Only `linux/amd64` and `linux/arm64`.
+- `sops.go` — `Encrypt` (public material only: `ageRecipients`, `sshPublicKeys` via ssh-to-age, `config` `.sops.yaml`), `Decrypt` (`ageKey`, `sshKey`, `keyservice` service bound as `sops-keyservice`, `keyserviceAddress`), `Keyservice` (`sops keyservice --network tcp`). Keys are mounted secrets; the `sops-with-keys` wrapper builds `SOPS_AGE_KEY` at runtime.
+- `keys.go` — `AgeKeygen` (`+cache="never"`, returns `AgeKeypair{PublicKey, PrivateKey}`), `SshToAge(publicKey)`.
+- `version.go` — `LatestSopsVersion` / `LatestAgeVersion` / `LatestSshToAgeVersion(token?)`, used by `.github/workflows/sops-version-check.yml` (bump PRs on `sops-version/<tool>-<ver>`).
+- `publish.go` — `Publish(registry, username, password, platforms?)` pushes `<registry>/sops:<SopsVersion>` and `:latest`; run by `.github/workflows/sops-publish.yml` on pushes to `main` touching `sops/**`.
+
+`sops/tests/` is a separate Dagger module (pattern of `quarto/tests`); run `dagger call all` from there after changes.
 
 ## Generated files — do not edit
 

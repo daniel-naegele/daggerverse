@@ -1,0 +1,69 @@
+name: Check Codemagic CLI Tools Versions
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check:
+    name: Check ${{ matrix.tool.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        tool:
+          - name: codemagic-cli-tools
+            field: CodemagicVersion
+            call: latest-codemagic-version
+          - name: bundletool
+            field: BundletoolVersion
+            call: latest-bundletool-version
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get latest ${{ matrix.tool.name }} version
+        id: latest
+        uses: dagger/dagger-for-github@v8.4.0
+        with:
+          workdir: codemagic-cli-tools
+          version: "0.21.7"
+          call: ${{ matrix.tool.call }}
+          cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
+
+      - name: Get current default version
+        id: current
+        run: |
+          version=$(grep -E '^\s*${{ matrix.tool.field }}:' codemagic-cli-tools/main.go | grep -oE '"[^"]+"' | tr -d '"')
+          echo "version=$version" >> $GITHUB_OUTPUT
+
+      - name: Open PR if version changed
+        if: steps.latest.outputs.output != '' && steps.latest.outputs.output != steps.current.outputs.version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TOOL: ${{ matrix.tool.name }}
+          FIELD: ${{ matrix.tool.field }}
+          NEW: ${{ steps.latest.outputs.output }}
+          OLD: ${{ steps.current.outputs.version }}
+        run: |
+          BRANCH="codemagic-cli-tools/${TOOL}-${NEW}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git ls-remote --exit-code --heads origin "$BRANCH" > /dev/null 2>&1; then
+            echo "Branch $BRANCH already exists — PR likely already open. Skipping."
+            exit 0
+          fi
+          git checkout -b "$BRANCH"
+          sed -i -E "s/^(\s*${FIELD}:\s*)\"[^\"]*\"/\1\"${NEW}\"/" codemagic-cli-tools/main.go
+          git add codemagic-cli-tools/main.go
+          git commit -m "chore(codemagic-cli-tools): bump default ${TOOL} version to ${NEW}"
+          git push origin "$BRANCH"
+          gh pr create \
+            --title "chore(codemagic-cli-tools): bump default ${TOOL} version to ${NEW}" \
+            --body "Automated PR: updates the default ${TOOL} version of the codemagic-cli-tools module from \`${OLD}\` to \`${NEW}\`." \
+            --base main \
+            --head "$BRANCH"

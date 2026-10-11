@@ -168,7 +168,8 @@ func (m *Tests) Precached(ctx context.Context) error {
 		_, err := dag.FlutterContainer().WithAndroidVersion(olderAndroidVersion).Android().
 			WithExec([]string{"sh", "-c",
 				"test -d $ANDROID_HOME/platforms/android-" + olderAndroidVersion +
-					" && test -d $ANDROID_HOME/build-tools/" + olderAndroidVersion + ".0.0"}).
+					" && test -d $ANDROID_HOME/build-tools/" + olderAndroidVersion + ".0.0" +
+					" && test -d $ANDROID_HOME/platforms/android-36 && test -d $ANDROID_HOME/build-tools/36.0.0"}).
 			Sync(ctx)
 		return err
 	})

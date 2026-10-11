@@ -31,13 +31,29 @@ func androidBase(platform dagger.Platform, flutterVersion, androidVersion string
 			`sdkmanager --update` +
 				// Install packages listed in Flutter's android_sdk/packages.txt for this version
 				` && packages=$(curl -s https://raw.githubusercontent.com/flutter/flutter/refs/tags/` + flutterVersion + `/engine/src/flutter/tools/android_sdk/packages.txt | grep -E '(platforms|build-tools|platform-tools|ndk)$' | cut -d: -f1 | cut -d, -f1)` +
-				` && yes | sdkmanager $packages "platforms;android-` + androidVersion + `" "build-tools;` + androidVersion + `.0.0"`,
+				` && yes | sdkmanager $packages ` + sdkPackages(androidVersion),
 		}).
 		WithExec([]string{"sh", "-c",
 			`yes | flutter doctor --android-licenses` +
 				` && flutter doctor` +
 				` && flutter precache --android`,
 		})
+}
+
+// sdkPackages lists the SDK platform and build-tools for androidVersion and for
+// defaultAndroidVersion. The latter is what the Flutter Gradle plugin compiles
+// against (flutter.compileSdkVersion) regardless of the emulator API level, so
+// it must be present even when androidVersion is overridden.
+func sdkPackages(androidVersion string) string {
+	versions := []string{defaultAndroidVersion}
+	if androidVersion != defaultAndroidVersion {
+		versions = append(versions, androidVersion)
+	}
+	var out string
+	for _, v := range versions {
+		out += ` "platforms;android-` + v + `" "build-tools;` + v + `.0.0"`
+	}
+	return out
 }
 
 // Android returns a container with the Flutter SDK and Android tools installed.

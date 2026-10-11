@@ -17,7 +17,7 @@ jobs:
     name: Detect changed modules
     runs-on: ubuntu-latest
     outputs:
-      modules: ${{ github.event_name == 'workflow_dispatch' && '["flutter-container","quarto","sops","flutter"]' || steps.filter.outputs.changes }}
+      modules: ${{ github.event_name == 'workflow_dispatch' && '["flutter-container","quarto","sops","flutter","codemagic-cli-tools"]' || steps.filter.outputs.changes }}
     steps:
       - uses: actions/checkout@v4
 
@@ -41,6 +41,9 @@ jobs:
             flutter:
               - 'flutter/**'
               - 'flutter-container/**'
+              - '.github/workflows/test.yml'
+            codemagic-cli-tools:
+              - 'codemagic-cli-tools/**'
               - '.github/workflows/test.yml'
 
   test:

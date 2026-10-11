@@ -27,6 +27,7 @@ func (m *Tests) All(ctx context.Context) error {
 	eg.Go(func() error { return m.EmulatorScripts(ctx) })
 	eg.Go(func() error { return m.EmulatorService(ctx) })
 	eg.Go(func() error { return m.VersionOverride(ctx) })
+	eg.Go(func() error { return m.AndroidToolchain(ctx) })
 
 	return eg.Wait()
 }
@@ -141,4 +142,37 @@ func (m *Tests) VersionOverride(ctx context.Context) error {
 	})
 
 	return eg.Wait()
+}
+
+// AndroidToolchain checks that the android image ships the Android CLI, keeps
+// sdkmanager on PATH for Flutter and Gradle, has the SDK licenses accepted and
+// that flutter doctor reports a working Android toolchain.
+func (m *Tests) AndroidToolchain(ctx context.Context) error {
+	out, err := dag.FlutterContainer().Android().
+		WithEnvVariable("CACHE_BUSTER", time.Now().String()).
+		WithExec([]string{"sh", "-euc", `
+android --no-metrics --version
+command -v sdkmanager
+command -v avdmanager
+test -s "$ANDROID_HOME/licenses/android-sdk-license"
+android --no-metrics --sdk="$ANDROID_HOME" sdk list
+flutter doctor -v
+`}).
+		Stdout(ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, want := range []string{
+		"platform-tools",
+		"build-tools/",
+		"ndk/",
+		"[✓] Android toolchain",
+		"All Android licenses accepted.",
+	} {
+		if !strings.Contains(out, want) {
+			return fmt.Errorf("expected %q in output:\n%s", want, out)
+		}
+	}
+	return nil
 }

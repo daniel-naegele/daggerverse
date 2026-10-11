@@ -20,6 +20,16 @@ docker pull ghcr.io/daniel-naegele/flutter:3.41.9-emulator
 
 Both `linux/amd64` and `linux/arm64` are supported (emulator: `linux/amd64` only).
 
+## Android SDK tooling
+
+SDK packages are installed with the [Android CLI](https://d.android.com/tools/agents/android-cli) (`android sdk install`), which replaces the deprecated `sdkmanager`. It ships as `android` in the pinned cmdline-tools package (build `16111833`, cmdline-tools 23.0) and accepts the licenses of the packages it installs (`$ANDROID_HOME/licenses`).
+
+- `sdkmanager` and `avdmanager` stay on `PATH` for Flutter and Gradle. In cmdline-tools 23.0, `sdkmanager` is a shim that forwards to `android sdk` and prints a deprecation warning.
+- `sdkmanager --licenses` is a no-op in cmdline-tools 23.0. Flutter 3.47.3+ then reads `$ANDROID_HOME/licenses` and `flutter doctor` reports the licenses as accepted. Older Flutter versions report "Android license status unknown" in `flutter doctor`. The licenses are still accepted on disk, so builds are not affected.
+- Only the licenses of the installed packages are accepted (`android-sdk-license`). The image no longer accepts every SDK license up front, so Gradle cannot auto-install packages under other licenses (e.g. preview packages).
+- The AVD in the emulator image is created with `avdmanager`: `android emulator create` only takes a device profile and cannot set the AVD name, system image or ABI.
+- The Android CLI is available for linux x86_64 only. `linux/arm64` images use cmdline-tools 22.0 (build `15859902`), the last release with the Java `sdkmanager`, and install packages with it. Expect the deprecation warning in arm64 builds.
+
 ## Emulator helpers and acceleration
 
 The emulator image includes startup helpers modeled after `reactivecircus/android-emulator-runner` defaults:
@@ -85,7 +95,7 @@ dagger call publish \
   --password=env:GITHUB_TOKEN
 ```
 
-Override versions with `with-flutter-version` and `with-android-version` (Android API level):
+Override versions with `with-flutter-version`, `with-android-version` (Android API level) and `with-cmdline-tools-version` (cmdline-tools build number, amd64 only; must ship the Android CLI, i.e. `15859902` or newer):
 
 ```sh
 dagger call with-flutter-version --version=3.41.9 with-android-version --version=35 emulator

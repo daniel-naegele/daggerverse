@@ -24,12 +24,17 @@ type FlutterContainer struct {
 	FlutterVersion string
 	// Android platform API level for the emulator system image (e.g. "36").
 	AndroidVersion string
+	// Build number of the Android SDK command-line tools installed on linux/amd64
+	// (commandlinetools-linux-<build>_latest.zip). Must ship the Android CLI
+	// (`android`), i.e. cmdline-tools 22.0 (15859902) or newer.
+	CmdlineToolsVersion string
 }
 
 func New() *FlutterContainer {
 	return &FlutterContainer{
-		FlutterVersion: "3.47.7",
-		AndroidVersion: "36",
+		FlutterVersion:      "3.47.7",
+		AndroidVersion:      "36",
+		CmdlineToolsVersion: "16111833", // cmdline-tools 23.0
 	}
 }
 
@@ -42,6 +47,14 @@ func (m *FlutterContainer) WithFlutterVersion(version string) *FlutterContainer 
 // WithAndroidVersion returns this module configured to use the given Android API level.
 func (m *FlutterContainer) WithAndroidVersion(version string) *FlutterContainer {
 	m.AndroidVersion = version
+	return m
+}
+
+// WithCmdlineToolsVersion returns this module configured to use the given Android
+// SDK command-line tools build number (e.g. "16111833" for cmdline-tools 23.0) on
+// linux/amd64. linux/arm64 always uses cmdline-tools 22.0, see androidSdkSetup.
+func (m *FlutterContainer) WithCmdlineToolsVersion(version string) *FlutterContainer {
+	m.CmdlineToolsVersion = version
 	return m
 }
 

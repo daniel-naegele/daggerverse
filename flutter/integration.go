@@ -44,7 +44,15 @@ fi
 start=$(date +%s)
 android-start-emulator > "$log" 2>&1 &
 starter=$!
-trap 'kill "$starter" 2>/dev/null; wait "$starter" 2>/dev/null' EXIT
+# Stop the emulator on exit without letting its shutdown status (e.g. 66) replace ours.
+cleanup() {
+  rc=$?
+  trap - EXIT
+  kill "$starter" 2>/dev/null
+  wait "$starter" 2>/dev/null
+  exit $rc
+}
+trap cleanup EXIT
 
 while ! grep -q "emulator ready" "$log"; do
   if [ "$require_kvm" = "true" ] && grep -q "hardware acceleration off" "$log"; then
@@ -90,7 +98,7 @@ while :; do
   if [ "$status" -eq 124 ] || [ "$status" -eq 137 ]; then
     echo "flutter test timed out after ${test_timeout}s" >&2
     infra=true
-  elif grep -qE "Failed to start Dart Development Service|Service has disappeared|device offline|Lost connection to device|Unable to connect to VM service|ProcessException" "$tlog"; then
+  elif grep -qE "Failed to start Dart Development Service|Service has disappeared|No tests ran|device offline|Lost connection to device|Unable to connect to VM service|ProcessException" "$tlog"; then
     infra=true
   fi
   diagnose
@@ -148,12 +156,12 @@ func (m *Flutter) IntegrationTest(
 	bootTimeout int,
 	// Seconds after which one flutter test attempt is aborted.
 	// +optional
-	// +default=1200
+	// +default=600
 	testTimeout int,
 	// Total flutter test attempts; only infrastructure failures (lost VM service,
 	// device offline, timeout) are retried, never failing tests.
 	// +optional
-	// +default=2
+	// +default=3
 	attempts int,
 	// Run flutter test with -v (verbose tool logs).
 	// +optional
@@ -176,10 +184,10 @@ func (m *Flutter) IntegrationTest(
 		bootTimeout = 300
 	}
 	if testTimeout <= 0 {
-		testTimeout = 1200
+		testTimeout = 600
 	}
 	if attempts <= 0 {
-		attempts = 2
+		attempts = 3
 	}
 	args := []string{strconv.FormatBool(requireKvm), target, strconv.Itoa(testTimeout), strconv.Itoa(attempts), strconv.FormatBool(flutterVerbose)}
 	if flavor != "" {

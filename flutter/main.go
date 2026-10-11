@@ -36,6 +36,7 @@ func New() *Flutter {
 	return &Flutter{
 		FlutterVersion: "3.47.7",
 		AndroidVersion: "36",
+		Registry:       "ghcr.io/daniel-naegele",
 	}
 }
 

@@ -18,7 +18,7 @@ flutter test --reporter expanded --file-reporter "json:` + reportsDir + `/test-r
 status=$?
 
 if [ -s ` + reportsDir + `/test-results.json ]; then
-  dart pub global run junitreport:tojunit \
+  ` + junitCmd + ` \
     --input ` + reportsDir + `/test-results.json \
     --output ` + reportsDir + `/junit.xml \
     --base ` + workspaceDir + `/ || status=1

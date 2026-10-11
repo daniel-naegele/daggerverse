@@ -59,7 +59,7 @@ func (m *FlutterContainer) Emulator(
 	}
 	abi := emulatorABI(platform)
 
-	return androidBase(platform, m.FlutterVersion).
+	return androidBase(platform, m.FlutterVersion, m.AndroidVersion).
 		WithEnvVariable("ANDROID_PLATFORM_VERSION", m.AndroidVersion).
 		WithEnvVariable("ANDROID_EMULATOR_NAME", "emulator").
 		WithEnvVariable("ANDROID_EMULATOR_PORT", "5554").

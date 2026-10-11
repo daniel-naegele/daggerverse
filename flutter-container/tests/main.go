@@ -27,6 +27,7 @@ func (m *Tests) All(ctx context.Context) error {
 	eg.Go(func() error { return m.EmulatorScripts(ctx) })
 	eg.Go(func() error { return m.EmulatorService(ctx) })
 	eg.Go(func() error { return m.VersionOverride(ctx) })
+	eg.Go(func() error { return m.Precached(ctx) })
 
 	return eg.Wait()
 }
@@ -138,6 +139,38 @@ func (m *Tests) VersionOverride(ctx context.Context) error {
 			return fmt.Errorf("expected AVD config to reference %q, got:\n%s", want, cfg)
 		}
 		return nil
+	})
+
+	return eg.Wait()
+}
+
+// Precached checks that what builds would otherwise download on every run is
+// baked into the images: junitreport, and the SDK platform and build-tools of
+// the configured Android API level.
+func (m *Tests) Precached(ctx context.Context) error {
+	eg, ctx := errgroup.WithContext(ctx)
+
+	eg.Go(func() error {
+		out, err := dag.FlutterContainer().Flutter().
+			WithEnvVariable("PUB_CACHE", "/opt/pub-global").
+			WithExec([]string{"dart", "pub", "global", "list"}).
+			Stdout(ctx)
+		if err != nil {
+			return err
+		}
+		if !strings.Contains(out, "junitreport") {
+			return fmt.Errorf("junitreport is not activated in the image:\n%s", out)
+		}
+		return nil
+	})
+
+	eg.Go(func() error {
+		_, err := dag.FlutterContainer().WithAndroidVersion(olderAndroidVersion).Android().
+			WithExec([]string{"sh", "-c",
+				"test -d $ANDROID_HOME/platforms/android-" + olderAndroidVersion +
+					" && test -d $ANDROID_HOME/build-tools/" + olderAndroidVersion + ".0.0"}).
+			Sync(ctx)
+		return err
 	})
 
 	return eg.Wait()

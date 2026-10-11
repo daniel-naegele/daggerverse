@@ -4,6 +4,15 @@ Dagger module that runs Flutter CI tasks: unit/widget tests, static analysis, fo
 
 Images come from the [`flutter-container`](../flutter-container) module (Flutter SDK, Android SDK and emulator stages). Every function accepts an optional pre-built image (`--flutter-image`, `--android-image`, `--emulator-image`), e.g. one of the prebuilt `ghcr.io/daniel-naegele/flutter` images, so the images do not have to be built locally.
 
+By default the images are built from scratch (cached by the engine). With `with-prebuilt-images` the published `flutter-container` images are pulled instead (`<registry>/flutter:<version>[-android|-emulator][-api<N>]`, default registry `ghcr.io/daniel-naegele`), so only those images are downloaded:
+
+```sh
+dagger call -m $M with-prebuilt-images test --project .
+dagger call -m $M with-prebuilt-images --registry ghcr.io/my-org with-android-version --version 35 integration-test --project .
+```
+
+The images ship everything builds would otherwise download on every run: `junitreport`, Flutter's Android artifacts, and the SDK platform and build-tools of the configured Android API level. Only pub packages and Gradle dependencies come from the cache volumes below.
+
 Pub packages and Gradle files are cached in the `flutter-pub-cache` and `flutter-gradle-cache` cache volumes.
 
 ## Functions

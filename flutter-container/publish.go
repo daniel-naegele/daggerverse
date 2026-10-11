@@ -14,6 +14,10 @@ import (
 //   - flutter:<version>-android  — android base (flutter + Android SDK + NDK)
 //   - flutter:<version>-emulator — emulator (android + emulator + AVD, per-platform ABI)
 //
+// The android and emulator images contain the SDK platform, build-tools (and AVD) for
+// the configured Android API level. For a non-default level the tags are
+// -android-api<N> / -emulator-api<N> so they never overwrite the default ones.
+//
 // Returns the digest of the published flutter base image.
 func (m *FlutterContainer) Publish(
 	ctx context.Context,
@@ -37,7 +41,7 @@ func (m *FlutterContainer) Publish(
 	for i, p := range platformList {
 		flutterVariants[i] = flutterBase(p, m.FlutterVersion).
 			WithRegistryAuth(registry, username, password)
-		androidVariants[i] = androidBase(p, m.FlutterVersion).
+		androidVariants[i] = androidBase(p, m.FlutterVersion, m.AndroidVersion).
 			WithRegistryAuth(registry, username, password)
 	}
 	emu, err := m.Emulator(ctx, PlatformAMD64)
@@ -46,9 +50,9 @@ func (m *FlutterContainer) Publish(
 	}
 	emulatorVariants[0] = emu.WithRegistryAuth(registry, username, password)
 
-	flutterTag := fmt.Sprintf("%s/flutter:%s", registry, m.FlutterVersion)
-	androidTag := fmt.Sprintf("%s/flutter:%s-android", registry, m.FlutterVersion)
-	emulatorTag := fmt.Sprintf("%s/flutter:%s-emulator", registry, m.FlutterVersion)
+	flutterTag := m.imageRef(registry, variantFlutter)
+	androidTag := m.imageRef(registry, variantAndroid)
+	emulatorTag := m.imageRef(registry, variantEmulator)
 
 	flutterDigest, err := dag.Container().
 		WithRegistryAuth(registry, username, password).

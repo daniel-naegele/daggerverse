@@ -3,9 +3,11 @@ package main
 import "dagger/flutter-container/internal/dagger"
 
 // androidBase builds the "android" stage on top of flutterBase: adds Android cmdline-tools,
-// SDK packages from Flutter's packages.txt, and runs flutter precache --android.
+// SDK packages from Flutter's packages.txt plus the platform and build-tools for
+// androidVersion (what Gradle would otherwise download in every build), and runs
+// flutter precache --android.
 // When platform is empty, Dagger auto-detects the engine's native platform.
-func androidBase(platform dagger.Platform, flutterVersion string) *dagger.Container {
+func androidBase(platform dagger.Platform, flutterVersion, androidVersion string) *dagger.Container {
 	return flutterBase(platform, flutterVersion).
 		WithEnvVariable("ANDROID_HOME", androidHome).
 		WithEnvVariable("ANDROID_SDK_ROOT", androidHome).
@@ -29,7 +31,7 @@ func androidBase(platform dagger.Platform, flutterVersion string) *dagger.Contai
 			`sdkmanager --update` +
 				// Install packages listed in Flutter's android_sdk/packages.txt for this version
 				` && packages=$(curl -s https://raw.githubusercontent.com/flutter/flutter/refs/tags/` + flutterVersion + `/engine/src/flutter/tools/android_sdk/packages.txt | grep -E '(platforms|build-tools|platform-tools|ndk)$' | cut -d: -f1 | cut -d, -f1)` +
-				` && yes | sdkmanager $packages`,
+				` && yes | sdkmanager $packages "platforms;android-` + androidVersion + `" "build-tools;` + androidVersion + `.0.0"`,
 		}).
 		WithExec([]string{"sh", "-c",
 			`yes | flutter doctor --android-licenses` +
@@ -44,5 +46,5 @@ func (m *FlutterContainer) Android(
 	// +optional
 	platform dagger.Platform,
 ) *dagger.Container {
-	return androidBase(platform, m.FlutterVersion)
+	return androidBase(platform, m.FlutterVersion, m.AndroidVersion)
 }

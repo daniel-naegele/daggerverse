@@ -17,6 +17,13 @@ const (
 	flutterHome  = "/opt/flutter"
 	androidHome  = "/opt/android-sdk-linux"
 	workspaceDir = "/workspace"
+	// pubGlobalDir holds globally activated Dart tools baked into the image
+	// (junitreport). Run them with PUB_CACHE set to this directory; it is
+	// separate from the project pub cache, which consumers mount over their own path.
+	pubGlobalDir = "/opt/pub-global"
+
+	defaultAndroidVersion = "36"
+	defaultRegistry       = "ghcr.io/daniel-naegele"
 )
 
 type FlutterContainer struct {
@@ -29,7 +36,7 @@ type FlutterContainer struct {
 func New() *FlutterContainer {
 	return &FlutterContainer{
 		FlutterVersion: "3.47.7",
-		AndroidVersion: "36",
+		AndroidVersion: defaultAndroidVersion,
 	}
 }
 

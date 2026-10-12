@@ -3,9 +3,11 @@ package main
 import "dagger/flutter-container/internal/dagger"
 
 // androidBase builds the "android" stage on top of flutterBase: adds Android cmdline-tools,
-// SDK packages from Flutter's packages.txt, and runs flutter precache --android.
+// SDK packages from Flutter's packages.txt plus the platform and build-tools for
+// androidVersion (what Gradle would otherwise download in every build), and runs
+// flutter precache --android.
 // When platform is empty, Dagger auto-detects the engine's native platform.
-func androidBase(platform dagger.Platform, flutterVersion string) *dagger.Container {
+func androidBase(platform dagger.Platform, flutterVersion, androidVersion string) *dagger.Container {
 	return flutterBase(platform, flutterVersion).
 		WithEnvVariable("ANDROID_HOME", androidHome).
 		WithEnvVariable("ANDROID_SDK_ROOT", androidHome).
@@ -29,7 +31,7 @@ func androidBase(platform dagger.Platform, flutterVersion string) *dagger.Contai
 			`sdkmanager --update` +
 				// Install packages listed in Flutter's android_sdk/packages.txt for this version
 				` && packages=$(curl -s https://raw.githubusercontent.com/flutter/flutter/refs/tags/` + flutterVersion + `/engine/src/flutter/tools/android_sdk/packages.txt | grep -E '(platforms|build-tools|platform-tools|ndk)$' | cut -d: -f1 | cut -d, -f1)` +
-				` && yes | sdkmanager $packages`,
+				` && yes | sdkmanager $packages ` + sdkPackages(androidVersion),
 		}).
 		WithExec([]string{"sh", "-c",
 			`yes | flutter doctor --android-licenses` +
@@ -38,11 +40,27 @@ func androidBase(platform dagger.Platform, flutterVersion string) *dagger.Contai
 		})
 }
 
+// sdkPackages lists the SDK platform and build-tools for androidVersion and for
+// defaultAndroidVersion. The latter is what the Flutter Gradle plugin compiles
+// against (flutter.compileSdkVersion) regardless of the emulator API level, so
+// it must be present even when androidVersion is overridden.
+func sdkPackages(androidVersion string) string {
+	versions := []string{defaultAndroidVersion}
+	if androidVersion != defaultAndroidVersion {
+		versions = append(versions, androidVersion)
+	}
+	var out string
+	for _, v := range versions {
+		out += ` "platforms;android-` + v + `" "build-tools;` + v + `.0.0"`
+	}
+	return out
+}
+
 // Android returns a container with the Flutter SDK and Android tools installed.
 // When platform is not specified, the engine's native platform is used.
 func (m *FlutterContainer) Android(
 	// +optional
 	platform dagger.Platform,
 ) *dagger.Container {
-	return androidBase(platform, m.FlutterVersion)
+	return androidBase(platform, m.FlutterVersion, m.AndroidVersion)
 }

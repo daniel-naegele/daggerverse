@@ -51,7 +51,12 @@ func flutterBase(platform dagger.Platform, flutterVersion string) *dagger.Contai
 			flutterHome,
 		}).
 		WithExec([]string{"flutter", "--version"}).
-		WithExec([]string{"chown", "-R", "root:root", flutterHome})
+		WithExec([]string{"chown", "-R", "root:root", flutterHome}).
+		// Settings and tools that would otherwise be (re)created or downloaded in every run.
+		WithExec([]string{"flutter", "config", "--no-analytics", "--no-cli-animations"}).
+		WithEnvVariable("PUB_CACHE", pubGlobalDir).
+		WithExec([]string{"dart", "pub", "global", "activate", "junitreport"}).
+		WithoutEnvVariable("PUB_CACHE")
 }
 
 // Flutter returns a container with the Flutter SDK installed (ubuntu:24.04 base).

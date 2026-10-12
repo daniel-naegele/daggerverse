@@ -111,7 +111,7 @@ while :; do
 done
 
 if [ -s ` + reportsDir + `/integration-test-results.json ]; then
-  dart pub global run junitreport:tojunit \
+  ` + junitCmd + ` \
     --input ` + reportsDir + `/integration-test-results.json \
     --output ` + reportsDir + `/junit.xml \
     --base ` + workspaceDir + `/ || status=1

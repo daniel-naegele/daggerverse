@@ -20,6 +20,8 @@ const (
 	gradleHome   = "/cache/gradle"
 	// pubGlobalDir holds globally activated Dart tools baked into the images.
 	pubGlobalDir = "/opt/pub-global"
+	// defaultAndroidVersion is the API level of the published images.
+	defaultAndroidVersion = "36"
 )
 
 type Flutter struct {
@@ -28,14 +30,15 @@ type Flutter struct {
 	// Android platform API level for the emulator system image (e.g. "36").
 	AndroidVersion string
 	// Registry to pull prebuilt images from (e.g. "ghcr.io/daniel-naegele"). When
-	// empty (the default) the images are built from scratch.
+	// empty the images are built from scratch. Prebuilt images only exist for the
+	// default Android API level, so a different AndroidVersion builds locally.
 	Registry string
 }
 
 func New() *Flutter {
 	return &Flutter{
 		FlutterVersion: "3.47.7",
-		AndroidVersion: "36",
+		AndroidVersion: defaultAndroidVersion,
 		Registry:       "ghcr.io/daniel-naegele",
 	}
 }
@@ -69,6 +72,19 @@ func (m *Flutter) WithPrebuiltImages(
 	return m
 }
 
+// WithoutPrebuiltImages returns this module configured to build the images from
+// scratch instead of pulling published ones.
+func (m *Flutter) WithoutPrebuiltImages() *Flutter {
+	m.Registry = ""
+	return m
+}
+
+// prebuilt reports whether published images are used: a registry is set and the
+// Android API level is the one they were built with.
+func (m *Flutter) prebuilt() bool {
+	return m.Registry != "" && m.AndroidVersion == defaultAndroidVersion
+}
+
 // images returns the flutter-container module configured with this module's versions.
 func (m *Flutter) images() *dagger.FlutterContainer {
 	return dag.FlutterContainer().
@@ -78,7 +94,7 @@ func (m *Flutter) images() *dagger.FlutterContainer {
 
 // FlutterImage returns the Flutter SDK image used by Test, Analyze and Format.
 func (m *Flutter) FlutterImage() *dagger.Container {
-	if m.Registry != "" {
+	if m.prebuilt() {
 		return m.images().PrebuiltFlutter(dagger.FlutterContainerPrebuiltFlutterOpts{Registry: m.Registry})
 	}
 	return m.images().Flutter()
@@ -86,7 +102,7 @@ func (m *Flutter) FlutterImage() *dagger.Container {
 
 // AndroidImage returns the Flutter + Android SDK image used by BuildApk and BuildAppBundle.
 func (m *Flutter) AndroidImage() *dagger.Container {
-	if m.Registry != "" {
+	if m.prebuilt() {
 		return m.images().PrebuiltAndroid(dagger.FlutterContainerPrebuiltAndroidOpts{Registry: m.Registry})
 	}
 	return m.images().Android()
@@ -94,7 +110,7 @@ func (m *Flutter) AndroidImage() *dagger.Container {
 
 // EmulatorImage returns the emulator image (AVD for AndroidVersion) used by IntegrationTest.
 func (m *Flutter) EmulatorImage() *dagger.Container {
-	if m.Registry != "" {
+	if m.prebuilt() {
 		return m.images().PrebuiltEmulator(dagger.FlutterContainerPrebuiltEmulatorOpts{Registry: m.Registry})
 	}
 	return m.images().Emulator()

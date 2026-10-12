@@ -14,9 +14,8 @@ import (
 //   - flutter:<version>-android  — android base (flutter + Android SDK + NDK)
 //   - flutter:<version>-emulator — emulator (android + emulator + AVD, per-platform ABI)
 //
-// The android and emulator images contain the SDK platform, build-tools (and AVD) for
-// the configured Android API level. For a non-default level the tags are
-// -android-api<N> / -emulator-api<N> so they never overwrite the default ones.
+// The android and emulator images use the default Android API level, so Publish
+// refuses to run with a different one (it would overwrite the default tags).
 //
 // Returns the digest of the published flutter base image.
 func (m *FlutterContainer) Publish(
@@ -28,6 +27,9 @@ func (m *FlutterContainer) Publish(
 	// +default="linux/amd64,linux/arm64"
 	platforms string,
 ) (string, error) {
+	if m.AndroidVersion != defaultAndroidVersion {
+		return "", fmt.Errorf("published images use Android API level %s, got %s", defaultAndroidVersion, m.AndroidVersion)
+	}
 	if platforms == "" {
 		platforms = "linux/amd64,linux/arm64"
 	}

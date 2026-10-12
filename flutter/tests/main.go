@@ -52,7 +52,7 @@ func (m *Tests) All(ctx context.Context) error {
 
 // Test runs unit/widget tests with coverage and checks the reports.
 func (m *Tests) Test(ctx context.Context) error {
-	reports := dag.Flutter().Test(m.App, dagger.FlutterTestOpts{Coverage: true})
+	reports := flutter().Test(m.App, dagger.FlutterTestOpts{Coverage: true})
 
 	junit, err := reports.File("junit.xml").Contents(ctx)
 	if err != nil {
@@ -94,7 +94,7 @@ void main() {
   });
 }
 `)
-	_, err := dag.Flutter().Test(app).Sync(ctx)
+	_, err := flutter().Test(app).Sync(ctx)
 	if err == nil {
 		return fmt.Errorf("expected Test to fail for a failing test")
 	}
@@ -102,7 +102,7 @@ void main() {
 		return fmt.Errorf("Test error does not mention the failing test: %w", err)
 	}
 
-	junit, err := dag.Flutter().
+	junit, err := flutter().
 		Test(app, dagger.FlutterTestOpts{IgnoreFailures: true}).
 		File("junit.xml").
 		Contents(ctx)
@@ -117,20 +117,20 @@ void main() {
 
 // Analyze runs flutter analyze with fatal infos.
 func (m *Tests) Analyze(ctx context.Context) error {
-	_, err := dag.Flutter().Analyze(ctx, m.App, dagger.FlutterAnalyzeOpts{FatalInfos: true})
+	_, err := flutter().Analyze(ctx, m.App, dagger.FlutterAnalyzeOpts{FatalInfos: true})
 	return err
 }
 
 // Format checks that the fixture is formatted.
 func (m *Tests) Format(ctx context.Context) error {
-	_, err := dag.Flutter().Format(ctx, m.App)
+	_, err := flutter().Format(ctx, m.App)
 	return err
 }
 
 // FormatDetectsUnformatted checks that the format check fails on badly formatted code.
 func (m *Tests) FormatDetectsUnformatted(ctx context.Context) error {
 	app := m.App.WithNewFile("lib/ugly.dart", "int   ugly( int a ){return a;}\n")
-	_, err := dag.Flutter().Format(ctx, app)
+	_, err := flutter().Format(ctx, app)
 	if err == nil {
 		return fmt.Errorf("expected format check to fail for lib/ugly.dart")
 	}
@@ -142,7 +142,7 @@ func (m *Tests) FormatDetectsUnformatted(ctx context.Context) error {
 
 // ApkDebug builds a debug APK without any signing configuration.
 func (m *Tests) ApkDebug(ctx context.Context) error {
-	apk := dag.Flutter().BuildApk(m.App, dagger.FlutterBuildApkOpts{Mode: "debug"})
+	apk := flutter().BuildApk(m.App, dagger.FlutterBuildApkOpts{Mode: "debug"})
 	name, err := apk.Name(ctx)
 	if err != nil {
 		return err
@@ -160,7 +160,7 @@ func (m *Tests) ApkDebug(ctx context.Context) error {
 // ApkRelease builds a release APK signed with a throwaway keystore and verifies the signature.
 func (m *Tests) ApkRelease(ctx context.Context) error {
 	keystore, password := keystore()
-	apk := dag.Flutter().BuildApk(m.App, dagger.FlutterBuildApkOpts{
+	apk := flutter().BuildApk(m.App, dagger.FlutterBuildApkOpts{
 		Mode:          "release",
 		BuildName:     "1.2.3",
 		BuildNumber:   "42",
@@ -196,7 +196,7 @@ func (m *Tests) ApkRelease(ctx context.Context) error {
 // AppBundleRelease builds a release app bundle signed with a throwaway keystore and verifies it.
 func (m *Tests) AppBundleRelease(ctx context.Context) error {
 	keystore, password := keystore()
-	aab := dag.Flutter().BuildAppBundle(m.App, dagger.FlutterBuildAppBundleOpts{
+	aab := flutter().BuildAppBundle(m.App, dagger.FlutterBuildAppBundleOpts{
 		Keystore:      keystore,
 		StorePassword: password,
 		KeyAlias:      keyAlias,
@@ -224,7 +224,7 @@ func (m *Tests) AppBundleRelease(ctx context.Context) error {
 // IntegrationTest runs the fixture's integration_test/ on the Android emulator
 // and checks that KVM acceleration was used.
 func (m *Tests) IntegrationTest(ctx context.Context) error {
-	reports := dag.Flutter().IntegrationTest(m.App)
+	reports := flutter().IntegrationTest(m.App)
 
 	boot, err := reports.File("boot.txt").Contents(ctx)
 	if err != nil {
@@ -300,7 +300,7 @@ func (m *Tests) VersionOverride(ctx context.Context) error {
 	p := pool.New().WithErrors().WithContext(ctx)
 
 	p.Go(func(ctx context.Context) error {
-		out, err := dag.Flutter().WithFlutterVersion(oldFlutterVersion).
+		out, err := flutter().WithFlutterVersion(oldFlutterVersion).
 			FlutterImage().
 			WithExec([]string{"flutter", "--version"}).
 			Stdout(ctx)
@@ -314,7 +314,7 @@ func (m *Tests) VersionOverride(ctx context.Context) error {
 	})
 
 	p.Go(func(ctx context.Context) error {
-		junit, err := dag.Flutter().WithFlutterVersion(oldFlutterVersion).
+		junit, err := flutter().WithFlutterVersion(oldFlutterVersion).
 			Test(versionProbe()).
 			File("junit.xml").
 			Contents(ctx)
@@ -328,13 +328,13 @@ func (m *Tests) VersionOverride(ctx context.Context) error {
 	})
 
 	p.Go(func(ctx context.Context) error {
-		_, err := dag.Flutter().WithFlutterVersion(oldFlutterVersion).
+		_, err := flutter().WithFlutterVersion(oldFlutterVersion).
 			Analyze(ctx, versionProbe(), dagger.FlutterAnalyzeOpts{FatalInfos: true})
 		return err
 	})
 
 	p.Go(func(ctx context.Context) error {
-		emu := dag.Flutter().WithAndroidVersion(oldAndroidVersion).EmulatorImage()
+		emu := flutter().WithAndroidVersion(oldAndroidVersion).EmulatorImage()
 		env, err := emu.EnvVariable(ctx, "ANDROID_PLATFORM_VERSION")
 		if err != nil {
 			return err
@@ -353,7 +353,7 @@ func (m *Tests) VersionOverride(ctx context.Context) error {
 	})
 
 	p.Go(func(ctx context.Context) error {
-		boot, err := dag.Flutter().WithAndroidVersion(oldAndroidVersion).
+		boot, err := flutter().WithAndroidVersion(oldAndroidVersion).
 			IntegrationTest(m.App).
 			File("boot.txt").
 			Contents(ctx)
@@ -395,4 +395,10 @@ func tail(s string, n int) string {
 		lines = lines[len(lines)-n:]
 	}
 	return strings.Join(lines, "\n")
+}
+
+// flutter returns the module under test building its images from the local
+// flutter-container (not the published ones), so image changes are tested too.
+func flutter() *dagger.Flutter {
+	return dag.Flutter().WithoutPrebuiltImages()
 }

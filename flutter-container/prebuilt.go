@@ -13,8 +13,8 @@ const (
 )
 
 // imageRef is the registry reference Publish uses for a variant, and PrebuiltFlutter /
-// PrebuiltAndroid / PrebuiltEmulator pull. The android and emulator images bake in the
-// Android API level, so a non-default level gets its own tags.
+// PrebuiltAndroid / PrebuiltEmulator pull. Published images always use the default
+// Android API level (the one Flutter compiles against), so it is not part of the tag.
 func (m *FlutterContainer) imageRef(registry, variant string) string {
 	if registry == "" {
 		registry = defaultRegistry
@@ -22,9 +22,6 @@ func (m *FlutterContainer) imageRef(registry, variant string) string {
 	tag := m.FlutterVersion
 	if variant != variantFlutter {
 		tag += "-" + variant
-		if m.AndroidVersion != defaultAndroidVersion {
-			tag += "-api" + m.AndroidVersion
-		}
 	}
 	return fmt.Sprintf("%s/flutter:%s", registry, tag)
 }

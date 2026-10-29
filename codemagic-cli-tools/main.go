@@ -50,7 +50,7 @@ type CodemagicCliTools struct {
 
 func New() *CodemagicCliTools {
 	return &CodemagicCliTools{
-		CodemagicVersion:  "0.70.1",
+		CodemagicVersion:  "0.70.2",
 		BundletoolVersion: "1.18.3",
 		PythonVersion:     "3.13",
 		JavaVersion:       "21",

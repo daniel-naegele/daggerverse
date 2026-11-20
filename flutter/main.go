@@ -37,7 +37,7 @@ type Flutter struct {
 
 func New() *Flutter {
 	return &Flutter{
-		FlutterVersion: "3.50.0",
+		FlutterVersion: "3.50.1",
 		AndroidVersion: defaultAndroidVersion,
 		Registry:       "ghcr.io/daniel-naegele",
 	}

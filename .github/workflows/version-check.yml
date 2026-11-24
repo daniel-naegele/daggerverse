@@ -14,7 +14,18 @@ jobs:
     name: Check
     runs-on: ubuntu-latest
     steps:
+      # PRs opened with GITHUB_TOKEN do not trigger the Test workflow without
+      # manual approval; pushing and opening them as the app does.
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.BOT_APP_ID }}
+          private-key: ${{ secrets.BOT_APP_PRIVATE_KEY }}
+
       - uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Get latest stable Flutter version
         id: latest
@@ -34,7 +45,7 @@ jobs:
       - name: Open PR if version changed
         if: steps.latest.outputs.output != steps.current.outputs.version
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           NEW="${{ steps.latest.outputs.output }}"
           BRANCH="flutter-version/${NEW}"

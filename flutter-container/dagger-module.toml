@@ -1,0 +1,5 @@
+name = "flutter-container"
+engineVersion = "v1.0.0-beta.28"
+
+[runtime]
+  source = "go"

@@ -20,6 +20,8 @@ func (m *Tests) All(ctx context.Context) error {
 	return p.Wait()
 }
 
+// Render renders the testdata project.
+// +check
 func (m *Tests) Render(ctx context.Context) error {
 	dir := dag.CurrentModule().Source().Directory("./testdata")
 
@@ -31,6 +33,8 @@ func (m *Tests) Render(ctx context.Context) error {
 	return nil
 }
 
+// BuildDocs renders the testdata project via BuildDocs.
+// +check
 func (m *Tests) BuildDocs(ctx context.Context) error {
 	dir := dag.CurrentModule().Source()
 

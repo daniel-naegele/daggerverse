@@ -42,8 +42,8 @@ func (m *Tests) All(ctx context.Context) error {
 	return p.Wait()
 }
 
-func cm() *dagger.CodemagicCliTools {
-	return dag.CodemagicCliTools()
+func cm() *dagger.CodemagicCLITools {
+	return dag.CodemagicCLITools()
 }
 
 func password() *dagger.Secret {
@@ -51,7 +51,7 @@ func password() *dagger.Secret {
 }
 
 func keystore() *dagger.File {
-	return cm().CreateKeystore(password(), keyAlias, dagger.CodemagicCliToolsCreateKeystoreOpts{
+	return cm().CreateKeystore(password(), keyAlias, dagger.CodemagicCLIToolsCreateKeystoreOpts{
 		CommonName:   "Dagger Test",
 		Organization: "daggerverse",
 		Country:      "DE",
@@ -81,6 +81,7 @@ with zipfile.ZipFile(src) as zin, zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED
 }
 
 // Tools checks that all binaries are wired up and the pinned bundletool is used.
+// +check
 func (m *Tests) Tools(ctx context.Context) error {
 	info, err := cm().BundletoolInfo(ctx)
 	if err != nil {
@@ -120,6 +121,7 @@ func (m *Tests) Tools(ctx context.Context) error {
 }
 
 // Keystore creates a keystore, verifies it and reads its certificate.
+// +check
 func (m *Tests) Keystore(ctx context.Context) error {
 	ks := cm().AndroidKeystore(keystore(), password(), keyAlias)
 	if _, err := ks.Verify(ctx); err != nil {
@@ -145,10 +147,11 @@ func (m *Tests) Keystore(ctx context.Context) error {
 }
 
 // AppBundle exercises android-app-bundle: dump, validate, is-signed, sign, build-apks, build-universal-apk.
+// +check
 func (m *Tests) AppBundle(ctx context.Context) error {
 	unsigned := cm().AndroidAppBundle(unsignedFixture())
 
-	pkg, err := unsigned.Dump(ctx, dagger.CodemagicCliToolsAndroidAppBundleDumpOpts{Xpath: "/manifest/@package"})
+	pkg, err := unsigned.Dump(ctx, dagger.CodemagicCLIToolsAndroidAppBundleDumpOpts{Xpath: "/manifest/@package"})
 	if err != nil {
 		return fmt.Errorf("dump: %w", err)
 	}
@@ -191,7 +194,7 @@ func (m *Tests) AppBundle(ctx context.Context) error {
 		return fmt.Errorf("build-universal-apk: %w", err)
 	}
 	// Universal APK signed with our keystore.
-	apk := unsigned.BuildUniversalApk(dagger.CodemagicCliToolsAndroidAppBundleBuildUniversalApkOpts{
+	apk := unsigned.BuildUniversalApk(dagger.CodemagicCLIToolsAndroidAppBundleBuildUniversalApkOpts{
 		Keystore:         keystore(),
 		KeystorePassword: password(),
 		KeyAlias:         keyAlias,
@@ -200,23 +203,24 @@ func (m *Tests) AppBundle(ctx context.Context) error {
 		return fmt.Errorf("build-universal-apk (signed): %w", err)
 	}
 	// APK set.
-	if err := assertZipEntry(ctx, unsigned.BuildApks(dagger.CodemagicCliToolsAndroidAppBundleBuildApksOpts{Universal: true}), "universal.apk"); err != nil {
+	if err := assertZipEntry(ctx, unsigned.BuildApks(dagger.CodemagicCLIToolsAndroidAppBundleBuildApksOpts{Universal: true}), "universal.apk"); err != nil {
 		return fmt.Errorf("build-apks: %w", err)
 	}
 
 	// Signing with partial signing options must be rejected.
-	if _, err := unsigned.BuildUniversalApk(dagger.CodemagicCliToolsAndroidAppBundleBuildUniversalApkOpts{KeyAlias: keyAlias}).Sync(ctx); err == nil {
+	if _, err := unsigned.BuildUniversalApk(dagger.CodemagicCLIToolsAndroidAppBundleBuildUniversalApkOpts{KeyAlias: keyAlias}).Sync(ctx); err == nil {
 		return fmt.Errorf("build-universal-apk with keyAlias but no keystore unexpectedly succeeded")
 	}
 	return nil
 }
 
 // UniversalApk exercises the deprecated universal-apk tool, with and without signing.
+// +check
 func (m *Tests) UniversalApk(ctx context.Context) error {
 	if err := assertZipEntry(ctx, cm().UniversalApk(unsignedFixture()), "AndroidManifest.xml"); err != nil {
 		return fmt.Errorf("universal-apk: %w", err)
 	}
-	apk := cm().UniversalApk(unsignedFixture(), dagger.CodemagicCliToolsUniversalApkOpts{
+	apk := cm().UniversalApk(unsignedFixture(), dagger.CodemagicCLIToolsUniversalApkOpts{
 		Keystore:         keystore(),
 		KeystorePassword: password(),
 		KeyAlias:         keyAlias,
@@ -228,6 +232,7 @@ func (m *Tests) UniversalApk(ctx context.Context) error {
 }
 
 // GitChangelog builds a git repository in the pipeline and generates a changelog from it.
+// +check
 func (m *Tests) GitChangelog(ctx context.Context) error {
 	repo := cm().Container().
 		WithEnvVariable("GIT_AUTHOR_NAME", "Test").
@@ -263,7 +268,7 @@ func (m *Tests) GitChangelog(ctx context.Context) error {
 		return fmt.Errorf("changelog should skip merge commits:\n%s", all)
 	}
 
-	since, err := cm().GitChangelog(ctx, src, dagger.CodemagicCliToolsGitChangelogOpts{
+	since, err := cm().GitChangelog(ctx, src, dagger.CodemagicCLIToolsGitChangelogOpts{
 		PreviousCommit: strings.TrimSpace(first),
 	})
 	if err != nil {
@@ -273,7 +278,7 @@ func (m *Tests) GitChangelog(ctx context.Context) error {
 		return fmt.Errorf("unexpected changelog since previous commit:\n%s", since)
 	}
 
-	limited, err := cm().GitChangelog(ctx, src, dagger.CodemagicCliToolsGitChangelogOpts{CommitLimit: 1})
+	limited, err := cm().GitChangelog(ctx, src, dagger.CodemagicCLIToolsGitChangelogOpts{CommitLimit: 1})
 	if err != nil {
 		return fmt.Errorf("git-changelog --commit-limit: %w", err)
 	}
@@ -285,6 +290,7 @@ func (m *Tests) GitChangelog(ctx context.Context) error {
 
 // GooglePlay checks argument wiring without real credentials: help output works and invalid credentials
 // fail cleanly before any API call.
+// +check
 func (m *Tests) GooglePlay(ctx context.Context) error {
 	help, err := cm().Exec([]string{"google-play", "bundles", "publish", "--help"}).Stdout(ctx)
 	if err != nil {
@@ -313,11 +319,12 @@ func (m *Tests) GooglePlay(ctx context.Context) error {
 }
 
 // Exec checks the escape hatch, including secret environment variables and source directories.
+// +check
 func (m *Tests) Exec(ctx context.Context) error {
 	src := dag.Directory().WithNewFile("hello.txt", "hello")
 	out, err := cm().Exec(
 		[]string{"sh", "-c", `cat hello.txt && test "$TOKEN" = "t0ken" && touch written`},
-		dagger.CodemagicCliToolsExecOpts{
+		dagger.CodemagicCLIToolsExecOpts{
 			Source:    src,
 			SecretEnv: []string{"TOKEN"},
 			Secrets:   []*dagger.Secret{dag.SetSecret("token", "t0ken")},
@@ -335,7 +342,7 @@ func (m *Tests) Exec(ctx context.Context) error {
 // Arm64 checks that the linux/arm64 image builds and its tools run (requires emulation on amd64 hosts).
 // APK generation is not tested: bundletool's bundled aapt2 is x86_64 only.
 func (m *Tests) Arm64(ctx context.Context) error {
-	out, err := cm().Container(dagger.CodemagicCliToolsContainerOpts{Platform: "linux/arm64"}).
+	out, err := cm().Container(dagger.CodemagicCLIToolsContainerOpts{Platform: "linux/arm64"}).
 		WithExec([]string{"sh", "-c", "uname -m && java -version && android-app-bundle bundletool info && git-changelog --help >/dev/null"}).
 		CombinedOutput(ctx)
 	if err != nil {
@@ -359,6 +366,7 @@ func assertZipEntry(ctx context.Context, file *dagger.File, entry string) error 
 }
 
 // VersionOverride checks that every With*Version override ends up in the built image.
+// +check
 func (m *Tests) VersionOverride(ctx context.Context) error {
 	const (
 		codemagicVersion  = "0.69.1"

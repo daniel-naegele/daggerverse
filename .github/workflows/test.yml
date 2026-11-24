@@ -32,19 +32,29 @@ jobs:
             flutter-container:
               - 'flutter-container/**'
               - '.github/workflows/test.yml'
+              - 'dagger.toml'
+              - 'dagger.lock'
             quarto:
               - 'quarto/**'
               - '.github/workflows/test.yml'
+              - 'dagger.toml'
+              - 'dagger.lock'
             sops:
               - 'sops/**'
               - '.github/workflows/test.yml'
+              - 'dagger.toml'
+              - 'dagger.lock'
             flutter:
               - 'flutter/**'
               - 'flutter-container/**'
               - '.github/workflows/test.yml'
+              - 'dagger.toml'
+              - 'dagger.lock'
             codemagic-cli-tools:
               - 'codemagic-cli-tools/**'
               - '.github/workflows/test.yml'
+              - 'dagger.toml'
+              - 'dagger.lock'
 
   test:
     name: Test ${{ matrix.module }}
@@ -79,10 +89,32 @@ jobs:
           sudo udevadm trigger --name-match=kvm
           ls -l /dev/kvm
 
-      - name: Run dagger tests
-        uses: dagger/dagger-for-github@v8.4.0
+      # Install only: the engine runs on this runner (needs /dev/kvm), not on
+      # Dagger Cloud Engines.
+      - name: Install Dagger
+        uses: dagger/dagger-for-github@v8.4.1
         with:
-          workdir: ${{ matrix.module }}/tests
-          version: "0.21.10"
-          call: all
-          cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
+          version: "1.0.0-beta.28"
+
+      # Same checks as `dagger check --module <module>-tests` locally.
+      - name: Run checks
+        env:
+          DAGGER_CLOUD_TOKEN: ${{ secrets.DAGGER_CLOUD_TOKEN }}
+        run: dagger check --progress=plain --module ${{ matrix.module }}-tests
+
+  generated:
+    name: Generated code is up to date
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Dagger
+        uses: dagger/dagger-for-github@v8.4.1
+        with:
+          version: "1.0.0-beta.28"
+
+      # Fails when committed dagger.gen.go / internal/ differ from `dagger generate`.
+      - name: Check generated code
+        env:
+          DAGGER_CLOUD_TOKEN: ${{ secrets.DAGGER_CLOUD_TOKEN }}
+        run: dagger check --progress=plain --module dagger-go-sdk

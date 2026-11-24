@@ -51,6 +51,7 @@ func (m *Tests) All(ctx context.Context) error {
 }
 
 // Test runs unit/widget tests with coverage and checks the reports.
+// +check
 func (m *Tests) Test(ctx context.Context) error {
 	reports := flutter().Test(m.App, dagger.FlutterTestOpts{Coverage: true})
 
@@ -85,6 +86,7 @@ func (m *Tests) Test(ctx context.Context) error {
 
 // TestFailureReported checks that a failing test fails Test, and that
 // ignoreFailures still returns a JUnit report containing the failure.
+// +check
 func (m *Tests) TestFailureReported(ctx context.Context) error {
 	app := m.App.WithNewFile("test/failing_test.dart", `import 'package:flutter_test/flutter_test.dart';
 
@@ -116,18 +118,21 @@ void main() {
 }
 
 // Analyze runs flutter analyze with fatal infos.
+// +check
 func (m *Tests) Analyze(ctx context.Context) error {
 	_, err := flutter().Analyze(ctx, m.App, dagger.FlutterAnalyzeOpts{FatalInfos: true})
 	return err
 }
 
 // Format checks that the fixture is formatted.
+// +check
 func (m *Tests) Format(ctx context.Context) error {
 	_, err := flutter().Format(ctx, m.App)
 	return err
 }
 
 // FormatDetectsUnformatted checks that the format check fails on badly formatted code.
+// +check
 func (m *Tests) FormatDetectsUnformatted(ctx context.Context) error {
 	app := m.App.WithNewFile("lib/ugly.dart", "int   ugly( int a ){return a;}\n")
 	_, err := flutter().Format(ctx, app)
@@ -141,6 +146,7 @@ func (m *Tests) FormatDetectsUnformatted(ctx context.Context) error {
 }
 
 // ApkDebug builds a debug APK without any signing configuration.
+// +check
 func (m *Tests) ApkDebug(ctx context.Context) error {
 	apk := flutter().BuildApk(m.App, dagger.FlutterBuildApkOpts{Mode: "debug"})
 	name, err := apk.Name(ctx)
@@ -158,6 +164,7 @@ func (m *Tests) ApkDebug(ctx context.Context) error {
 }
 
 // ApkRelease builds a release APK signed with a throwaway keystore and verifies the signature.
+// +check
 func (m *Tests) ApkRelease(ctx context.Context) error {
 	keystore, password := keystore()
 	apk := flutter().BuildApk(m.App, dagger.FlutterBuildApkOpts{
@@ -194,6 +201,7 @@ func (m *Tests) ApkRelease(ctx context.Context) error {
 }
 
 // AppBundleRelease builds a release app bundle signed with a throwaway keystore and verifies it.
+// +check
 func (m *Tests) AppBundleRelease(ctx context.Context) error {
 	keystore, password := keystore()
 	aab := flutter().BuildAppBundle(m.App, dagger.FlutterBuildAppBundleOpts{
@@ -223,6 +231,7 @@ func (m *Tests) AppBundleRelease(ctx context.Context) error {
 
 // IntegrationTest runs the fixture's integration_test/ on the Android emulator
 // and checks that KVM acceleration was used.
+// +check
 func (m *Tests) IntegrationTest(ctx context.Context) error {
 	reports := flutter().IntegrationTest(m.App)
 
@@ -296,6 +305,7 @@ void main() {
 // emulator system image and the API level the integration tests run on.
 // (AndroidVersion does not affect Android builds: compileSdk/targetSdk come from
 // the project and the Flutter Gradle plugin.)
+// +check
 func (m *Tests) VersionOverride(ctx context.Context) error {
 	p := pool.New().WithErrors().WithContext(ctx)
 

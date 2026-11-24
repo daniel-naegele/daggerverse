@@ -82,6 +82,7 @@ func assertDecrypted(ctx context.Context, f *dagger.File, fx fixture) error {
 }
 
 // ContainerAmd64 checks that all tools run on linux/amd64.
+// +check
 func (m *Tests) ContainerAmd64(ctx context.Context) error {
 	out, err := dag.Sops().Container(dagger.SopsContainerOpts{Platform: "linux/amd64"}).
 		WithExec([]string{"sh", "-c", "sops --version; age --version; age-keygen --version; ssh-to-age -version"}).
@@ -98,6 +99,7 @@ func (m *Tests) ContainerAmd64(ctx context.Context) error {
 }
 
 // ContainerArm64 checks that the linux/arm64 image contains all binaries (no emulation needed).
+// +check
 func (m *Tests) ContainerArm64(ctx context.Context) error {
 	ctr := dag.Sops().Container(dagger.SopsContainerOpts{Platform: "linux/arm64"})
 	platform, err := ctr.Platform(ctx)
@@ -120,6 +122,7 @@ func (m *Tests) ContainerArm64(ctx context.Context) error {
 }
 
 // AgeRoundTrip encrypts each fixture to a fresh age recipient and decrypts it with the age key.
+// +check
 func (m *Tests) AgeRoundTrip(ctx context.Context) error {
 	kp, pub, err := ageKeypair(ctx)
 	if err != nil {
@@ -145,7 +148,7 @@ func ageKeypair(ctx context.Context) (*dagger.SopsAgeKeypair, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	kp := dag.LoadSopsAgeKeypairFromID(dagger.SopsAgeKeypairID(id))
+	kp := dagger.Ref[*dagger.SopsAgeKeypair](dag, id)
 	pub, err := kp.PublicKey(ctx)
 	if err != nil {
 		return nil, "", err
@@ -172,6 +175,7 @@ func sshKeypair(ctx context.Context) (string, *dagger.Secret, error) {
 }
 
 // SSHRoundTrip encrypts to an SSH public key and decrypts with the SSH private key (via ssh-to-age).
+// +check
 func (m *Tests) SSHRoundTrip(ctx context.Context) error {
 	pub, priv, err := sshKeypair(ctx)
 	if err != nil {
@@ -205,6 +209,7 @@ func (m *Tests) SSHRoundTrip(ctx context.Context) error {
 }
 
 // KeyserviceRoundTrip decrypts via a keyservice; the decrypting container holds no key.
+// +check
 func (m *Tests) KeyserviceRoundTrip(ctx context.Context) error {
 	kp, pub, err := ageKeypair(ctx)
 	if err != nil {
@@ -222,6 +227,7 @@ func (m *Tests) KeyserviceRoundTrip(ctx context.Context) error {
 }
 
 // KeyserviceRawClient binds an SSH-key keyservice into a plain client container and runs sops there.
+// +check
 func (m *Tests) KeyserviceRawClient(ctx context.Context) error {
 	pub, priv, err := sshKeypair(ctx)
 	if err != nil {
@@ -247,6 +253,7 @@ func (m *Tests) KeyserviceRawClient(ctx context.Context) error {
 }
 
 // ConfigEncrypt encrypts using only a .sops.yaml (creation rule with encrypted_regex).
+// +check
 func (m *Tests) ConfigEncrypt(ctx context.Context) error {
 	kp, pub, err := ageKeypair(ctx)
 	if err != nil {
@@ -270,6 +277,7 @@ func (m *Tests) ConfigEncrypt(ctx context.Context) error {
 }
 
 // Extract decrypts a single value.
+// +check
 func (m *Tests) Extract(ctx context.Context) error {
 	kp, pub, err := ageKeypair(ctx)
 	if err != nil {
@@ -287,6 +295,7 @@ func (m *Tests) Extract(ctx context.Context) error {
 }
 
 // DecryptWithoutKeyFails checks that decryption fails without a matching key.
+// +check
 func (m *Tests) DecryptWithoutKeyFails(ctx context.Context) error {
 	_, pub, err := ageKeypair(ctx)
 	if err != nil {
@@ -312,6 +321,7 @@ func (m *Tests) DecryptWithoutKeyFails(ctx context.Context) error {
 //   - ssh-to-age 1.2.0: that release has no -version flag (and 1.3.0 reports a
 //     stale "1.2.0"), so the installed binary's sha256 is compared with the
 //     release's sha256sums.txt entry instead.
+// +check
 func (m *Tests) VersionOverride(ctx context.Context) error {
 	ctr := dag.Sops().
 		WithSopsVersion("3.10.2").

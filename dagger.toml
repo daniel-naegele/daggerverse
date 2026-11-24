@@ -1,0 +1,56 @@
+[modules.dagger-go-sdk]
+source = "github.com/dagger/go-sdk"
+
+[sdks.go]
+module = "dagger-go-sdk"
+
+[sdks.go.scopes.quarto]
+is-module = true
+
+[sdks.go.scopes.sops]
+is-module = true
+
+[sdks.go.scopes.codemagic-cli-tools]
+is-module = true
+
+[sdks.go.scopes.flutter-container]
+is-module = true
+
+[sdks.go.scopes."quarto/tests"]
+clients = ["./quarto"]
+is-module = true
+
+[sdks.go.scopes."codemagic-cli-tools/tests"]
+clients = ["./codemagic-cli-tools"]
+is-module = true
+
+[sdks.go.scopes."flutter-container/tests"]
+clients = ["./flutter-container"]
+is-module = true
+
+[sdks.go.scopes.flutter]
+clients = ["./flutter-container"]
+is-module = true
+
+[sdks.go.scopes."sops/tests"]
+clients = ["./sops"]
+is-module = true
+
+[sdks.go.scopes."flutter/tests"]
+clients = ["./flutter", "./flutter-container"]
+is-module = true
+
+[modules.quarto-tests]
+source = "quarto/tests"
+
+[modules.sops-tests]
+source = "sops/tests"
+
+[modules.codemagic-cli-tools-tests]
+source = "codemagic-cli-tools/tests"
+
+[modules.flutter-container-tests]
+source = "flutter-container/tests"
+
+[modules.flutter-tests]
+source = "flutter/tests"

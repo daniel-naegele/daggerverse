@@ -21,10 +21,11 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Publish codemagic-cli-tools image
-        uses: dagger/dagger-for-github@v8.4.0
+        uses: dagger/dagger-for-github@v8.4.1
         with:
           workdir: codemagic-cli-tools
-          version: "0.21.10"
+          module: .
+          version: "1.0.0-beta.28"
           call: >-
             publish
             --registry=${{ vars.REGISTRY }}

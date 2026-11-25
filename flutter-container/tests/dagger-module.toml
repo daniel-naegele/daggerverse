@@ -1,0 +1,10 @@
+name = "tests"
+engineVersion = "v1.0.0-beta.28"
+disableDefaultFunctionCaching = true
+
+[runtime]
+  source = "go"
+
+[[dependencies]]
+  name = "flutter-container"
+  source = ".."

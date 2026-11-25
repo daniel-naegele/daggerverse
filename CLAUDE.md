@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository structure
 
-A monorepo of [Dagger](https://dagger.io) modules, each in its own subdirectory with its own `dagger.json`, Go module, and generated SDK code.
+A monorepo of [Dagger](https://dagger.io) 1.0 modules, each in its own subdirectory with its own `dagger-module.toml`, Go module, and committed generated SDK code. The root `dagger.toml` is the workspace: it registers every module as a Go SDK scope and installs the five `*/tests` modules as `<module>-tests` so `dagger check` finds their checks. `dagger.lock` pins resolved images/Git refs. CLI and `engineVersion` are pinned to `v1.0.0-beta.28` (the CLI comes from the `github:dagger/nix` flake input in `~/code/nix/config`).
 
 | Directory | Module name | Purpose |
 |-----------|-------------|---------|
@@ -16,18 +16,24 @@ A monorepo of [Dagger](https://dagger.io) modules, each in its own subdirectory 
 
 ## Common commands
 
-All Dagger CLI commands must be run from inside the module directory (e.g. `flutter-container/`).
+In 1.0, `dagger call` without `-m` loads the *workspace* (root `dagger.toml`), not the module in the cwd. Select a module with `-m` (`--load-module`).
 
 ```bash
-# List all callable functions
-dagger call --help
+# List checks / run all of them (in parallel, cached per check)
+dagger check -l
+dagger check
+dagger check --module flutter-tests                  # one tests module
+dagger check --module sops-tests --check=extract     # one check
 
-# Call a function (example)
-dagger call flutter-image --flutter-version=3.29.3
+# Call a module function (from the module dir, or -m <dir> from the root)
+dagger call -m . --help
+dagger call -m flutter-container flutter --help
 
-# Regenerate dagger.gen.go after changing the module's exported API
-dagger develop
+# Regenerate committed SDK code after changing any module's API or dependencies
+dagger generate -y
 ```
+
+Check functions are the `// +check`-annotated methods in each `tests/main.go` (everything `All()` runs; `Arm64`/`LatestVersions` deliberately are not checks). Add `// +check` to every new test function and call it from `All()` too. `dagger check` also runs the Go SDK staleness check (`dagger-go-sdk/generate/stale`), so uncommitted codegen fails CI.
 
 Go is only used as the Dagger SDK language — there is no standalone Go binary to build or test directly.
 
@@ -50,7 +56,7 @@ When `platform == ""`, `flutterBase`/`androidBase` call `dag.Container()` withou
 
 **EmulatorService networking:** the emulator binds console (5554) and adb (5555) to `127.0.0.1` only. With `ANDROID_EMULATOR_EXPOSE_ADB=true`, `android-start-emulator` starts `socat` forwarders bound to the container's non-loopback IPv4 addresses *after* `sys.boot_completed=1`, so Dagger's port health check implies a booted device. Clients bind the service (e.g. `WithServiceBinding("emulator", svc)`), then `adb connect emulator:5555` and `flutter test -d emulator:5555`. Never use the alias `emu`: adb parses `emu:...` as a `<console port>,<adb port>` pair. KVM requires the Dagger engine itself to see `/dev/kvm`; the script records the chosen mode as device prop `debug.emulator.accel`.
 
-`flutter-container/tests/` is a separate Dagger module (depends on `..`) with `EmulatorScripts`, `EmulatorService` (boots the service, connects via adb, asserts boot + KVM), `VersionOverride` and `All`. Run `dagger call all` from `flutter-container/tests/` after changing the module (run `dagger develop` in both directories first; reset `engineVersion` if it gets bumped).
+`flutter-container/tests/` is a separate Dagger module (depends on `..`) with `EmulatorScripts`, `EmulatorService` (boots the service, connects via adb, asserts boot + KVM), `VersionOverride` and `All`. Run `dagger check --module flutter-container-tests` after changing the module (after `dagger generate -y`).
 
 ## flutter module architecture
 
@@ -73,8 +79,9 @@ The optional `flutterImage`/`androidImage`/`emulatorImage` parameters let you su
 
 **Running the emulator tests requires a rootful engine** with `/dev/kvm` (a rootless engine drops devices, dagger/dagger#13827). Locally:
 ```bash
-cd flutter/tests && sg podman -c 'CONTAINER_HOST=unix:///run/podman/podman.sock dagger call all'
+CONTAINER_HOST=unix:///run/podman/podman.sock dagger check --module flutter-tests
 ```
+This is also why CI stays on GitHub Actions (`.github/workflows/test.yml`: KVM enabled on the runner, engine started there, `dagger check --module <module>-tests`) instead of Dagger Cloud Checks/Cloud Engines.
 
 **Key constants (defined in both modules' `main.go`):**
 ```go
@@ -88,9 +95,9 @@ workspaceDir = "/workspace"
 Module type: `Quarto`, wrapping a `Ctr *dagger.Container` built from the official `ghcr.io/quarto-dev/quarto` image (override via `New`'s `version`/`image`/`container` params) plus `tinytex` for PDF output.
 
 - `Render(ctx, source, input?, siteUrl?) *Renderer` — runs `quarto render` against an arbitrary source directory; chainable `Renderer.Directory()`/`Renderer.File(name)` extract the output.
-- `BuildDocs(ctx, source, docsDir?) *dagger.Directory` — thin wrapper around `Render(source.Directory(docsDir)).Directory()`. `docsDir` defaults to `"docs"`. `source` is `+defaultPath="."`, which only auto-resolves to the caller's working directory when this module is the one loaded directly (no `-m`, `dagger.json` in cwd); when loaded via `-m` (local path or remote ref), the default-path context resolves relative to the *loaded* module instead, so callers must pass `--source .` explicitly (verified empirically — omitting it fails with "stat docs: no such file or directory" against the quarto module's own tree). This is the function meant to be called directly by consumers via `dagger call -m github.com/daniel-naegele/daggerverse/quarto build-docs --source .`, without adding this module as a dependency — for consumers that need custom composition beyond "render one directory" (e.g. merging in separately-generated content), install it as a real dependency instead (`dagger install github.com/daniel-naegele/daggerverse/quarto`) and call `Render`/`BuildDocs` directly from Go.
+- `BuildDocs(ctx, source, docsDir?) *dagger.Directory` — thin wrapper around `Render(source.Directory(docsDir)).Directory()`. `docsDir` defaults to `"docs"`. `source` is `+defaultPath="."`, which only auto-resolves to the caller's working directory when this module is the one loaded directly (no `-m`, `dagger.json` in cwd); when loaded via `-m` (local path or remote ref), the default-path context resolves relative to the *loaded* module instead, so callers must pass `--source .` explicitly (verified empirically — omitting it fails with "stat docs: no such file or directory" against the quarto module's own tree). This is the function meant to be called directly by consumers via `dagger call -m github.com/daniel-naegele/daggerverse/quarto build-docs --source .`, without adding this module as a dependency — for consumers that need custom composition beyond "render one directory" (e.g. merging in separately-generated content), install it as a real dependency instead (`dagger module client add github.com/daniel-naegele/daggerverse/quarto --sdk=go`) and call `Render`/`BuildDocs` directly from Go.
 
-`quarto/tests/` is a separate Dagger module (depends on `quarto` via a local path, `"source": ".."`) that exercises the module against the `testdata/` fixture — run `dagger call all` from `quarto/tests/` after changing `quarto/main.go` (and running `dagger develop` in both `quarto/` and `quarto/tests/` to regenerate bindings).
+`quarto/tests/` is a separate Dagger module (depends on `quarto` via a local path, `"source": ".."`) that exercises the module against the `testdata/` fixture — run `dagger check --module quarto-tests` after changing `quarto/main.go` (after `dagger generate -y` to regenerate bindings).
 
 ## sops module architecture
 
@@ -102,7 +109,7 @@ Module type: `Sops`. Pinned defaults in `New()`: `SopsVersion` `3.13.3`, `AgeVer
 - `version.go` — `LatestSopsVersion` / `LatestAgeVersion` / `LatestSshToAgeVersion(token?)`, used by `.github/workflows/sops-version-check.yml` (bump PRs on `sops-version/<tool>-<ver>`).
 - `publish.go` — `Publish(registry, username, password, platforms?)` pushes `<registry>/sops:<SopsVersion>` and `:latest`; run by `.github/workflows/sops-publish.yml` on pushes to `main` touching `sops/**`.
 
-`sops/tests/` is a separate Dagger module (pattern of `quarto/tests`); run `dagger call all` from there after changes.
+`sops/tests/` is a separate Dagger module (pattern of `quarto/tests`); run `dagger check --module sops-tests` after changes.
 
 ## codemagic-cli-tools module architecture
 
@@ -117,8 +124,8 @@ Module type: `CodemagicCliTools`. Pinned defaults as struct fields set in `New()
 - `version.go` — `LatestCodemagicVersion` (PyPI JSON) / `LatestBundletoolVersion` (GitHub releases/latest redirect), used by `.github/workflows/codemagic-cli-tools-version-check.yml` (opens bump PRs, skips if branch exists).
 - `publish.go` — `Publish(ctx, registry, username, password, platforms?)` pushes `<registry>/codemagic-cli-tools:<CodemagicVersion>`; run by `.github/workflows/codemagic-cli-tools-publish.yml` on pushes to main touching `codemagic-cli-tools/**`.
 
-Secrets are never plain args: they are set with `WithSecretVariable` and passed to codemagic as `@env:<NAME>` references. `codemagic-cli-tools/tests/` is a separate module (depends on `..`, like `quarto/tests`): run `dagger call all` (and `dagger call arm-64` for the arm64 image) from there after changes.
+Secrets are never plain args: they are set with `WithSecretVariable` and passed to codemagic as `@env:<NAME>` references. `codemagic-cli-tools/tests/` is a separate module (depends on `..`, like `quarto/tests`): run `dagger check --module codemagic-cli-tools-tests` (and `dagger call -m codemagic-cli-tools/tests arm-64` for the arm64 image) after changes.
 
 ## Generated files — do not edit
 
-`dagger.gen.go` and `internal/dagger/dagger.gen.go` in each module are auto-generated. After changing the public API (struct fields, method signatures), run `dagger develop` inside that module directory to regenerate them.
+`dagger.gen.go` and `internal/` in each module are auto-generated and committed (1.0 modules do not run codegen at load time). After changing the public API (struct fields, method signatures) or dependencies, run `dagger generate -y` from the repo root and commit the result; CI's staleness check fails otherwise. Generated Go names use acronym casing (`CodemagicCLITools`, `SHA`), and objects are re-loaded by ID with `dagger.Ref[*dagger.T](dag, id)`.

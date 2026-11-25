@@ -34,6 +34,7 @@ func (m *Tests) All(ctx context.Context) error {
 
 // EmulatorScripts checks that the emulator image ships the helper scripts and
 // socat, and that android-wait-for-emulator times out after wall-clock seconds.
+// +check
 func (m *Tests) EmulatorScripts(ctx context.Context) error {
 	_, err := dag.FlutterContainer().Emulator().
 		WithEnvVariable("CACHE_BUSTER", time.Now().String()).
@@ -60,6 +61,7 @@ echo "android-wait-for-emulator failed after ${elapsed}s"
 
 // EmulatorService boots the emulator service, connects to it over the network
 // with adb and checks that it booted with hardware acceleration.
+// +check
 func (m *Tests) EmulatorService(ctx context.Context) error {
 	svc := dag.FlutterContainer().EmulatorService()
 
@@ -99,6 +101,7 @@ flutter devices
 
 // VersionOverride checks that WithFlutterVersion and WithAndroidVersion are
 // honored.
+// +check
 func (m *Tests) VersionOverride(ctx context.Context) error {
 	eg, ctx := errgroup.WithContext(ctx)
 
@@ -147,6 +150,7 @@ func (m *Tests) VersionOverride(ctx context.Context) error {
 // Precached checks that what builds would otherwise download on every run is
 // baked into the images: junitreport, and the SDK platform and build-tools of
 // the configured Android API level.
+// +check
 func (m *Tests) Precached(ctx context.Context) error {
 	eg, ctx := errgroup.WithContext(ctx)
 

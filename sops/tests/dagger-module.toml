@@ -1,0 +1,11 @@
+name = "tests"
+engineVersion = "v1.0.0-beta.28"
+include = ["!../../.direnv", "!../../.devenv", "!../../go.work", "!../../go.work.sum"]
+disableDefaultFunctionCaching = true
+
+[runtime]
+  source = "go"
+
+[[dependencies]]
+  name = "sops"
+  source = ".."

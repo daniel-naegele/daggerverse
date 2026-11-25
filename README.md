@@ -25,7 +25,7 @@ dagger call -m github.com/daniel-naegele/daggerverse/quarto build-docs --source 
 Minimal multi-arch image with [sops](https://github.com/getsops/sops), [age](https://github.com/FiloSottile/age) and [ssh-to-age](https://github.com/Mic92/ssh-to-age) (published as `ghcr.io/daniel-naegele/sops`), plus Dagger functions to encrypt with public keys only, decrypt with age or SSH ed25519 keys, and run a sops keyservice so other containers can decrypt without holding the key:
 
 ```bash
-dagger call -m github.com/daniel-naegele/daggerverse/sops decrypt --file secrets.enc.yaml --age-key env:SOPS_AGE_KEY export --path secrets.yaml
+dagger call -m github.com/daniel-naegele/daggerverse/sops decrypt --file secrets.enc.yaml --age-key env://SOPS_AGE_KEY export --path secrets.yaml
 ```
 
 ### [codemagic-cli-tools](./codemagic-cli-tools/)
@@ -34,5 +34,5 @@ Minimal multi-arch image with [Codemagic CLI tools](https://github.com/codemagic
 
 ```bash
 dagger call -m github.com/daniel-naegele/daggerverse/codemagic-cli-tools \
-  google-play --credentials env:GOOGLE_PLAY_CREDENTIALS publish-bundle --bundle app.aab --track internal
+  google-play --credentials env://GOOGLE_PLAY_CREDENTIALS publish-bundle --bundle app.aab --track internal
 ```

@@ -33,6 +33,8 @@ dagger call -m flutter-container flutter --help
 dagger generate -y
 ```
 
+Secret arguments need a provider scheme in 1.0: `--password=env://REGISTRY_PASSWORD`, `file://PATH`, `cmd://COMMAND`. The 0.x form `env:NAME` fails with "secret address must name its provider with a scheme".
+
 Check functions are the `// +check`-annotated methods in each `tests/main.go` (everything `All()` runs; `Arm64`/`LatestVersions` deliberately are not checks). Add `// +check` to every new test function and call it from `All()` too. `dagger check` also runs the Go SDK staleness check (`dagger-go-sdk/generate/stale`), so uncommitted codegen fails CI.
 
 Go is only used as the Dagger SDK language — there is no standalone Go binary to build or test directly.

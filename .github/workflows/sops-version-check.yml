@@ -33,7 +33,7 @@ jobs:
           workdir: sops
           module: .
           version: "1.0.0-beta.28"
-          call: latest-${{ matrix.tool }}-version --token=env:GITHUB_TOKEN
+          call: latest-${{ matrix.tool }}-version --token=env://GITHUB_TOKEN
           cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
